@@ -39,6 +39,7 @@
 * [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
+* [JSON output mode](#json-output-mode)
 * [License](#license)
 
 If you are considering donating, please first consider donating to:
@@ -103,6 +104,8 @@ Use keys `5`, `6`, `7` and `0` to show/hide the gpu monitoring boxes. `5` = Gpu 
 Gpu stats/graphs can also be displayed in the "Cpu box" (not as verbose), see the cpu options menu for info and configuration.
 
 Note that the binaries provided on the release page (when released) and the continuous builds will not have gpu support enabled.
+
+(Note: the release binaries for this fork are built with `GPU_SUPPORT=true`, so gpu support is enabled.)
 
 Because the GPU support relies on loading of dynamic gpu libraries, gpu support will not work when also static linking.
 
@@ -210,6 +213,8 @@ Resource monitor that shows usage and stats for processor, memory, disks, networ
 
 C++ version and continuation of [bashtop](https://github.com/aristocratos/bashtop) and [bpytop](https://github.com/aristocratos/bpytop).
 
+This fork adds a headless [JSON output mode](#json-output-mode) so btop can be used from scripts, cron jobs or as a monitoring daemon without a terminal.
+
 ## Features
 
 * Easy to use, with a game inspired menu system.
@@ -227,6 +232,7 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 * Battery meter
 * Selectable symbols for the graphs.
 * Custom presets
+* Headless JSON output mode with daemon support (`btop --json`)
 * And more...
 
 ## Themes
@@ -361,9 +367,9 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Installation
 
-**Binaries for Linux are statically compiled with musl and work on kernel releases 2.6.39 and newer**
+**Binaries for this fork's releases are x86_64 Linux only, dynamically linked against glibc and built with GPU support enabled.**
 
-1. **Download btop-(VERSION)-(ARCH)-(PLATFORM).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
+1. **Download btop-x86_64-linux-gnu-(VERSION).tar.gz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
    **Notice! Use x86_64 for 64-bit x86 systems, i486 and i686 are 32-bit!**
 
