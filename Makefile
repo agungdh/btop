@@ -76,8 +76,8 @@ OLDLD := $(LDFLAGS)
 
 PREFIX ?= /usr/local
 
-#? Web UI (btop-web static build) to install to $(PREFIX)/share/btop/web, if present.
-#? Override with WEBDIR=path or build btop-web and run `make install`.
+#? Web UI (btop-web static build). `make web` copies it next to the binary so the HTTP
+#? server can serve it. Override with WEBDIR=path.
 WEBDIR ?= ../btop-web/build
 
 #? Detect PLATFORM and ARCH from uname/gcc if not set
@@ -286,7 +286,7 @@ endif
 
 #? Default Make
 .ONESHELL:
-all: | info rocm_smi info-quiet directories btop.1 config.h btop
+all: | info rocm_smi info-quiet directories web btop.1 config.h btop
 
 ifneq ($(QUIET),true)
 info:
@@ -318,6 +318,7 @@ help:
 	@printf "usage: make [argument]\n\n"
 	@printf "arguments:\n"
 	@printf "  all          Compile btop (default argument)\n"
+	@printf "  web          Copy btop-web static build to bin/web (from \$$WEBDIR)\n"
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
@@ -339,6 +340,16 @@ $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
 	@$(QUIET) || printf "$(BLD)Configuring $(BUILDDIR)/config.h$(RST)\n"
 	@$(VERBOSE) || printf 'sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null\n'
 	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
+
+#? Copy the btop-web static build to $(TARGETDIR)/web so the HTTP server can serve it
+#? next to the binary. Skipped silently when no web build exists.
+web: | directories
+	@if [ -d "$(WEBDIR)" ]; then \
+		rm -rf $(TARGETDIR)/web && cp -pr "$(WEBDIR)" "$(TARGETDIR)/web"; \
+		$(call green,Copied web UI to: ,$(WHITE)$(TARGETDIR)/web); \
+	else \
+		$(QUIET) || $(call yellow,No web UI build at '$(WEBDIR)': skipping,,\n); \
+	fi
 
 #? Man page
 btop.1: manpage.md | directories
@@ -372,13 +383,6 @@ install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@$(call green,Installing themes to: $(WHITE)$(DESTDIR)$(PREFIX)/share/btop/themes)
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
-ifneq ($(wildcard $(WEBDIR)/index.html),)
-	@$(call green,Installing web UI to: $(WHITE)$(DESTDIR)$(PREFIX)/share/btop/web)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop/web
-	@cp -pr $(WEBDIR)/. $(DESTDIR)$(PREFIX)/share/btop/web
-else
-	@$(call yellow,No web UI build at '$(WEBDIR)': skipping web UI install)
-endif
 	@$(call green,Installing desktop entry to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/applications/btop.desktop)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
 	@cp -p btop.desktop $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
@@ -490,4 +494,4 @@ $(BUILDDIR)/%.c.o: $(SRCDIR)/$(PLATFORM_DIR)/intel_gpu_top/%.c | directories
 
 
 #? Non-File Targets
-.PHONY: all config.h msg help pre
+.PHONY: all config.h msg help pre web

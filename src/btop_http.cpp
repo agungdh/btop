@@ -192,8 +192,8 @@ namespace Http {
 		Sampler sampler { options, update_ms };
 		sampler.start();
 
-		//? Locate the bundled web UI (btop-web static build) so the SPA can be served
-		//? alongside the API. Resolution order: $BTOP_WEB_DIR > <binary>/../share/btop/web
+		//? Locate the web UI (btop-web static build) to serve the SPA alongside the API.
+		//? Resolution order: $BTOP_WEB_DIR > <binary>/web > <binary>/../share/btop/web
 		//? > /usr/[local/]share/btop/web. Everything is served same-origin, so the UI
 		//? adapts to whatever port btop ends up binding.
 		std::string web_app_dir;
@@ -201,7 +201,13 @@ namespace Http {
 			web_app_dir = env_dir;
 		}
 		else if (not Global::self_path.empty()) {
-			web_app_dir = (Global::self_path / "../share/btop/web").lexically_normal().string();
+			for (const auto* rel : {"web", "../share/btop/web"}) {
+				const auto candidate = (Global::self_path / rel).lexically_normal();
+				if (fs::is_directory(candidate)) {
+					web_app_dir = candidate.string();
+					break;
+				}
+			}
 		}
 		if (not web_app_dir.empty() and not fs::is_directory(web_app_dir)) {
 			for (const auto* candidate : {"/usr/local/share/btop/web", "/usr/share/btop/web"}) {
@@ -237,7 +243,7 @@ namespace Http {
 			{ "Access-Control-Allow-Headers", "Content-Type" },
 		});
 
-		//? Serve the SPA's static assets (/_app/...) from the bundled web UI.
+		//? Serve the SPA's static assets (/_app/...) from the web UI directory.
 		if (have_web and fs::is_directory(fs::path(web_app_dir) / "_app")) {
 			svr.set_mount_point("/_app", (fs::path(web_app_dir) / "_app").string());
 		}
