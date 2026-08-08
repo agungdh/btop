@@ -39,6 +39,7 @@ static void version() noexcept {
 	} else {
 		fmt::println("btop version: {}{}+{}{}", BOLD, Global::Version, GIT_COMMIT, RESET);
 	}
+	fmt::println("based on btop v1.4.7");
 }
 
 static void build_info() noexcept {

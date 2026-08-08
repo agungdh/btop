@@ -213,7 +213,7 @@ Resource monitor that shows usage and stats for processor, memory, disks, networ
 
 C++ version and continuation of [bashtop](https://github.com/aristocratos/bashtop) and [bpytop](https://github.com/aristocratos/bpytop).
 
-This fork adds a headless [JSON output mode](#json-output-mode) so btop can be used from scripts, cron jobs or as a monitoring daemon without a terminal.
+This fork (v0.0.1) is based on upstream [btop](https://github.com/aristocratos/btop) v1.4.7 and adds a headless [JSON output mode](#json-output-mode) so btop can be used from scripts, cron jobs or as a monitoring daemon without a terminal.
 
 ## Features
 
@@ -1328,7 +1328,7 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 #### btop.conf: (auto generated if not found)
 
 ```toml
-#? Config file for btop v.1.4.5
+#? Config file for btop v.0.0.1
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
