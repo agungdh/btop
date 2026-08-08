@@ -48,4 +48,4 @@ jobs:
         run: apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Compile
-        run: make CXX=g++ GPU_SUPPORT=true
+        run: make CXX=g++ CXXFLAGS=-march=x86-64-v2 GPU_SUPPORT=true

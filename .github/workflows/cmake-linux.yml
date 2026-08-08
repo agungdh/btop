@@ -63,11 +63,12 @@ jobs:
           if [[ "${COMPILER}" == "clang" ]]; then
             export CC=clang-${VERSION}
             export CXX=clang++-${VERSION}
-            export CXXFLAGS="-stdlib=libc++"
+            export CXXFLAGS="-stdlib=libc++ -march=x86-64-v2"
             export LDFLAGS="-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind"
           else
             export CC=gcc-${VERSION}
             export CXX=g++-${VERSION}
+            export CXXFLAGS="-march=x86-64-v2"
           fi
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 
