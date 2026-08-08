@@ -289,11 +289,12 @@ namespace Http {
 			res.set_content(snap.value().first, "application/json");
 		});
 
-		//? SPA fallback: unknown GETs serve the app shell so deep links / refreshes work.
-		//? Must be registered last so the API routes above take precedence.
+		//? SPA fallback: unknown routes serve the app shell so deep links / refreshes
+		//? work, instead of a bare 404. Must be registered last so the API routes and
+		//? static assets above take precedence.
 		if (have_web) {
-			svr.Get(".*", [&spa_index](const httplib::Request& req, httplib::Response& res) {
-				if (req.get_header_value("Accept").find("text/html") != std::string::npos) {
+			svr.Get(".*", [&spa_index](const httplib::Request&, httplib::Response& res) {
+				if (not spa_index.empty()) {
 					res.set_content(spa_index, "text/html; charset=utf-8");
 					return;
 				}
