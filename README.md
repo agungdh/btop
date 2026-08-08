@@ -233,6 +233,7 @@ This fork (v0.0.3) is based on upstream [btop](https://github.com/aristocratos/b
 * Selectable symbols for the graphs.
 * Custom presets
 * Headless JSON output mode with daemon support (`btop --json`)
+* Headless HTTP server mode with JSON and SSE endpoints (`btop --http`)
 * And more...
 
 ## Themes
@@ -1589,15 +1590,20 @@ Options:
   -h, --help              Show this help message and exit
   -V, --version           Show a version message and exit (more with --version)
 
-JSON output options (only valid with --json):
+JSON output options (--json, shared flags also work with --http):
       --json              Headless mode, output system stats as JSON. Does not require a TTY
   -o, --output <file>     Write JSON output to <file> instead of stdout ('-' for stdout)
   -n, --iterations <n>    Number of snapshots to write before exiting (0 = run forever, default 1)
-      --daemon            Fork and run in the background as a daemon (requires --output)
+      --daemon            Fork and run in the background as a daemon (requires --output with --json)
       --pidfile <path>    Write the daemon PID to <path> (only with --daemon)
       --sections <list>   Comma separated list of sections: cpu,mem,net,proc,gpu (default all)
       --top-procs <n>     Only output the top <n> processes sorted by cpu usage
       --pid <pid>         Include detailed information for process <pid>
+
+HTTP server options (only valid with --http):
+      --http [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json) and a
+                              continuous SSE stream (GET /api/stream). Does not require a TTY.
+                              Default address 127.0.0.1:8080
 ```
 
 #### JSON output mode
@@ -1627,6 +1633,67 @@ When more than one snapshot is written the output is compact newline-delimited J
 per line). Daemon mode rewrites the output file with the latest snapshot on every update; kill it
 with `SIGTERM` or `SIGINT` for a clean shutdown.
 
+#### HTTP server mode
+
+`btop --http [addr:port]` runs the same headless collectors and exposes them over HTTP so a
+frontend can consume the data live without spawning a new process per request. The server binds to
+`127.0.0.1:8080` by default; pass an address and/or port to change it (for example `--http
+0.0.0.0:9000` or `--http :9000`). Port `0` picks a free ephemeral port and prints the chosen one
+to stdout.
+
+Endpoints:
+
+| Method | Path          | Description                                                |
+| ------ | ------------- | ---------------------------------------------------------- |
+| GET    | `/healthz`    | Liveness probe, returns `{"status":"ok"}`                  |
+| GET    | `/`           | JSON index with version, uptime and endpoint list          |
+| GET    | `/api/json`   | Latest collected snapshot as JSON (one-shot)               |
+| GET    | `/api/stream` | Server-Sent Events stream, one `snapshot` event per update |
+
+All responses include `Access-Control-Allow-Origin: *`. A background thread collects a snapshot
+every update interval (`-u`, default 2000 ms) and caches it; `GET /api/json` returns the cached
+snapshot (the first request waits one update interval so usage deltas are valid, like `--json`),
+while `GET /api/stream` pushes every new snapshot. The `--sections`, `--top-procs`, `--pid`,
+`--daemon` and `--pidfile` options work here too.
+
+Examples:
+
+```bash
+# One-shot snapshot over HTTP
+curl -s http://127.0.0.1:8080/api/json
+
+# Stream snapshots (one per update interval)
+curl -N http://127.0.0.1:8080/api/stream
+
+# Bind to all interfaces and refresh every 500 ms
+btop --http 0.0.0.0:8080 -u 500
+
+# Run as a daemon
+btop --http 127.0.0.1:8080 --daemon --pidfile /run/btop.pid
+```
+
+Consuming the stream from a browser frontend:
+
+```js
+const source = new EventSource("http://127.0.0.1:8080/api/stream");
+source.addEventListener("snapshot", (e) => {
+  const data = JSON.parse(e.data);
+  console.log(data.cpu.percent["total"], data.mem.stats);
+});
+```
+
+Binding to anything other than `127.0.0.1` exposes the metrics unauthenticated; keep the server on
+localhost or behind an authenticated reverse proxy.
+
 ## LICENSE
 
 [Apache License 2.0](LICENSE)
+
+### Vendored third-party libraries
+
+| Library     | Purpose            | License     | Notes                              |
+| ----------- | ------------------ | ----------- | ---------------------------------- |
+| [fmtlib/fmt](https://github.com/fmtlib/fmt) | Formatting | MIT         | Header-only, vendored in `include/` |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON serialization | MIT | Header-only, vendored in `include/` |
+| [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) | HTTP server | MIT | Header-only, vendored in `include/` |
+| [Terminus-Forest/widechar-width](https://github.com/Terminus-Forest/widechar-width) | Wide char width | Apache-2.0 | Vendored in `include/` |

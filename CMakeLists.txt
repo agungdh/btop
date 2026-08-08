@@ -50,6 +50,7 @@ add_library(libbtop OBJECT
   src/btop_cli.cpp
   src/btop_config.cpp
   src/btop_draw.cpp
+  src/btop_http.cpp
   src/btop_input.cpp
   src/btop_json.cpp
   src/btop_log.cpp

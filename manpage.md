@@ -12,6 +12,8 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 **btop** [**\-\-json** [**-o** _file_] [**-n** _count_] [**\-\-sections** _list_] [**\-\-top-procs** _n_] [**\-\-pid** _pid_] [**\-\-daemon**] [**\-\-pidfile** _path_]]
 
+**btop** [**\-\-http** [_addr:port_] [**\-\-sections** _list_] [**\-\-top-procs** _n_] [**\-\-pid** _pid_] [**\-\-daemon**] [**\-\-pidfile** _path_]]
+
 **btop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
@@ -91,6 +93,36 @@ per line). Daemon mode rewrites the output file with the latest snapshot on ever
 
 **\-\-pid _pid_**
 :   Include detailed information for the process with the given pid.
+
+# HTTP SERVER OPTIONS
+
+The following options start **btop** as a headless HTTP server that does not require a terminal.
+The same collectors as the TUI and the JSON mode run in a background thread, collecting a snapshot
+every update interval (default 2000 ms, see **-u**). The latest snapshot is served at
+`GET /api/json` (one-shot) and every new snapshot is pushed over Server-Sent Events at
+`GET /api/stream`. All responses include `Access-Control-Allow-Origin: *`. Kill the server with
+**SIGTERM** or **SIGINT** for a clean shutdown.
+
+**\-\-http [_addr_:port]**
+:   Start the HTTP server, defaulting to `127.0.0.1:8080`. The value may be `host:port`, `:port`
+    or just `port`; a missing host defaults to `127.0.0.1`. Port `0` picks a free ephemeral port
+    and prints the chosen address to standard output.
+
+**\-\-sections _list_**
+:   Comma separated list of sections to collect and serve: cpu, mem, net, proc, gpu. Default is
+    all available sections.
+
+**\-\-top-procs _n_**
+:   Only output the top _n_ processes, sorted by cpu usage.
+
+**\-\-pid _pid_**
+:   Include detailed information for the process with the given pid.
+
+**\-\-daemon**
+:   Fork and run in the background as a daemon. Does not require **\-\-output**.
+
+**\-\-pidfile _path_**
+:   Write the daemon's PID to _path_. Only used with **\-\-daemon**.
 
 **-h**, **\-\-help**
 :   Show summary of options.

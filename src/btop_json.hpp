@@ -44,8 +44,18 @@ namespace Json {
 	//* compact and a trailing newline is appended, making it suitable for newline-delimited streaming.
 	[[nodiscard]] std::string snapshot(const Options& options, bool pretty = true);
 
+	//* Collect a warm-up sample of every selected section so deltas are valid from the first real
+	//* snapshot. Must run once before the first real snapshot.
+	void warmup(const Options& options);
+
+	//* Fork and detach from the terminal, redirecting std streams to /dev/null and writing the
+	//* pidfile. Unlike daemonize() no output file is required. Must be called before any collection
+	//* so forked processes don't inherit thread/async state.
+	bool daemonize_process(const std::optional<std::filesystem::path>& pidfile);
+
 	//* Fork and detach from the terminal, redirecting std streams to /dev/null and writing the pidfile.
-	//* Must be called before any collection so forked processes don't inherit thread/async state.
+	//* Requires a real output file. Must be called before any collection so forked processes don't
+	//* inherit thread/async state.
 	bool daemonize(const Options& options);
 
 	//* Run headless JSON mode, writing <iterations> snapshots (0 = forever) at <update_ms> intervals.

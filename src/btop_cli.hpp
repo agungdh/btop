@@ -34,6 +34,8 @@ namespace Cli {
 		std::optional<std::uint32_t> updates;
 		// Headless JSON output mode (no TTY required)
 		bool json_output {};
+		// Headless HTTP server mode, "[addr:]port" to listen on (default "127.0.0.1:8080")
+		std::optional<std::string> http;
 		// Path to write JSON output to instead of stdout ('-' for stdout)
 		std::optional<stdfs::path> output_file;
 		// Number of JSON snapshots to write (0 = run forever)

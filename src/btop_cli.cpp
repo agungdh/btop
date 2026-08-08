@@ -196,6 +196,21 @@ namespace Cli {
 				cli.json_output = true;
 				continue;
 			}
+			if (arg == "--http") {
+				if (cli.http.has_value()) {
+					error("http mode can't be set twice");
+					return std::unexpected { 1 };
+				}
+				//? Optional value in the form "[addr:]port", defaults to 127.0.0.1:8080
+				auto value = std::string_view { "127.0.0.1:8080" };
+				const auto next = std::next(it);
+				if (next != args.end() and not next->starts_with('-')) {
+					value = *next;
+					++it;
+				}
+				cli.http = std::make_optional(std::string { value });
+				continue;
+			}
 			if (arg == "-o" || arg == "--output") {
 				// This flag requires an argument.
 				if (++it == args.end()) {
@@ -295,19 +310,31 @@ namespace Cli {
 			return std::unexpected { 1 };
 		}
 
-		//? Validate that JSON-only flags are used together with --json
-		if (not cli.json_output and (cli.output_file.has_value() or cli.iterations.has_value() or cli.daemon
+		//? Validate that headless-only flags are used together with --json or --http
+		if (not cli.json_output and not cli.http.has_value() and (cli.output_file.has_value() or cli.iterations.has_value() or cli.daemon
 			or cli.pidfile.has_value() or cli.sections.has_value() or cli.top_procs.has_value() or cli.pid.has_value())) {
-			error("Options --output, --iterations, --daemon, --pidfile, --sections, --top-procs and --pid can only be used together with --json");
+			error("Options --output, --iterations, --daemon, --pidfile, --sections, --top-procs and --pid can only be used together with --json or --http");
 			return std::unexpected { 1 };
 		}
 
-		//? Daemon mode requires an output file
-		if (cli.daemon and not cli.output_file.has_value()) {
+		//? --json and --http are mutually exclusive
+		if (cli.json_output and cli.http.has_value()) {
+			error("Options --json and --http are mutually exclusive");
+			return std::unexpected { 1 };
+		}
+
+		//? --output and --iterations are only meaningful with --json
+		if (not cli.json_output and (cli.output_file.has_value() or cli.iterations.has_value())) {
+			error("Options --output and --iterations can only be used together with --json");
+			return std::unexpected { 1 };
+		}
+
+		//? Daemon mode requires an output file in json mode (http mode has no output file)
+		if (cli.daemon and cli.json_output and not cli.output_file.has_value()) {
 			error("--daemon requires an output file (use --output <file>)");
 			return std::unexpected { 1 };
 		}
-		if (cli.daemon and cli.output_file.has_value() and cli.output_file.value() == "-") {
+		if (cli.daemon and cli.json_output and cli.output_file.has_value() and cli.output_file.value() == "-") {
 			error("--daemon can't write to stdout, use --output <file>");
 			return std::unexpected { 1 };
 		}
@@ -387,7 +414,11 @@ namespace Cli {
 			"  {2}    --pidfile{1} <path>    Write the daemon PID to <path> (only with --daemon)\n"
 			"  {2}    --sections{1} <list>   Comma separated list of sections: cpu,mem,net,proc,gpu (default all)\n"
 			"  {2}    --top-procs{1} <n>     Only output the top <n> processes sorted by cpu usage\n"
-			"  {2}    --pid{1} <pid>         Include detailed information for process <pid>\n",
+			"  {2}    --pid{1} <pid>         Include detailed information for process <pid>\n"
+			"{0}HTTP server options:{1}\n"
+			"  {2}    --http{1} [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json)\n"
+			"                                    and a continuous SSE stream (GET /api/stream). Does not\n"
+			"                                    require a TTY. Default address 127.0.0.1:8080\n",
 			BOLD_UNDERLINE, RESET, BOLD
 		);
 	}

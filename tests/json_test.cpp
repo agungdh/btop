@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "btop_cli.hpp"
+#include "btop_http.hpp"
 #include "btop_json.hpp"
 
 using nlohmann::json;
@@ -144,4 +145,122 @@ TEST(json, cli_parse_daemon_requires_output) {
 		EXPECT_FALSE(result.has_value());
 		EXPECT_NE(result.error(), 0);
 	}
+}
+
+TEST(http, parse_address_forms) {
+	Http::Address addr;
+
+	EXPECT_TRUE(Http::parse_address("127.0.0.1:8080", addr));
+	EXPECT_EQ(addr.host, "127.0.0.1");
+	EXPECT_EQ(addr.port, 8080);
+
+	EXPECT_TRUE(Http::parse_address("0.0.0.0:18090", addr));
+	EXPECT_EQ(addr.host, "0.0.0.0");
+	EXPECT_EQ(addr.port, 18090);
+
+	EXPECT_TRUE(Http::parse_address(":8081", addr));
+	EXPECT_EQ(addr.host, "127.0.0.1");
+	EXPECT_EQ(addr.port, 8081);
+
+	EXPECT_TRUE(Http::parse_address("18082", addr));
+	EXPECT_EQ(addr.host, "127.0.0.1");
+	EXPECT_EQ(addr.port, 18082);
+
+	EXPECT_TRUE(Http::parse_address(":0", addr));
+	EXPECT_EQ(addr.host, "127.0.0.1");
+	EXPECT_EQ(addr.port, 0);
+
+	EXPECT_TRUE(Http::parse_address("192.168.1.1:65535", addr));
+	EXPECT_EQ(addr.host, "192.168.1.1");
+	EXPECT_EQ(addr.port, 65535);
+}
+
+TEST(http, parse_address_invalid) {
+	Http::Address addr;
+
+	EXPECT_FALSE(Http::parse_address("", addr));
+	EXPECT_FALSE(Http::parse_address(":", addr));
+	EXPECT_FALSE(Http::parse_address("nope:abc", addr));
+	EXPECT_FALSE(Http::parse_address("127.0.0.1:", addr));
+	EXPECT_FALSE(Http::parse_address("127.0.0.1:70000", addr));
+	EXPECT_FALSE(Http::parse_address("127.0.0.1:-1", addr));
+	EXPECT_FALSE(Http::parse_address("127.0.0.1:80x", addr));
+	EXPECT_FALSE(Http::parse_address("127.0.0.1: 8080", addr));
+}
+
+TEST(http, cli_parse_http_flags) {
+	const std::vector<std::string_view> args {
+		"--http", "0.0.0.0:9000", "-u", "500", "--sections", "cpu,mem",
+		"--top-procs", "10", "--pid", "42", "--daemon", "--pidfile", "/tmp/btop.pid",
+	};
+	auto result = Cli::parse(args);
+	ASSERT_TRUE(result.has_value());
+	const auto& cli = result.value();
+	ASSERT_TRUE(cli.http.has_value());
+	EXPECT_EQ(cli.http.value(), "0.0.0.0:9000");
+	EXPECT_TRUE(cli.daemon);
+	ASSERT_TRUE(cli.updates.has_value());
+	EXPECT_EQ(cli.updates.value(), 500);
+	ASSERT_TRUE(cli.sections.has_value());
+	EXPECT_EQ(cli.sections.value(), "cpu,mem");
+	ASSERT_TRUE(cli.top_procs.has_value());
+	EXPECT_EQ(cli.top_procs.value(), 10);
+	ASSERT_TRUE(cli.pid.has_value());
+	EXPECT_EQ(cli.pid.value(), 42);
+}
+
+TEST(http, cli_parse_http_default_value) {
+	{
+		const std::vector<std::string_view> args { "--http" };
+		auto result = Cli::parse(args);
+		ASSERT_TRUE(result.has_value());
+		ASSERT_TRUE(result.value().http.has_value());
+		EXPECT_EQ(result.value().http.value(), "127.0.0.1:8080");
+	}
+	{
+		const std::vector<std::string_view> args { "--http", ":8082" };
+		auto result = Cli::parse(args);
+		ASSERT_TRUE(result.has_value());
+		ASSERT_TRUE(result.value().http.has_value());
+		EXPECT_EQ(result.value().http.value(), ":8082");
+	}
+	{
+		const std::vector<std::string_view> args { "--http", "9000" };
+		auto result = Cli::parse(args);
+		ASSERT_TRUE(result.has_value());
+		ASSERT_TRUE(result.value().http.has_value());
+		EXPECT_EQ(result.value().http.value(), "9000");
+	}
+}
+
+TEST(http, cli_parse_http_conflicts) {
+	//? --http and --json are mutually exclusive
+	{
+		const std::vector<std::string_view> args { "--http", "--json" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+	//? --output is json-only
+	{
+		const std::vector<std::string_view> args { "--http", "-o", "/tmp/out.json" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+	//? --iterations is json-only
+	{
+		const std::vector<std::string_view> args { "--http", "-n", "5" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+}
+
+TEST(http, cli_parse_http_daemon_without_output) {
+	//? http daemon mode must not require --output
+	const std::vector<std::string_view> args { "--http", "--daemon" };
+	auto result = Cli::parse(args);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_TRUE(result.value().daemon);
 }

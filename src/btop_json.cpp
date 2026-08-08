@@ -225,17 +225,6 @@ namespace {
 	}
 #endif
 
-	//* Collect a warm-up sample of every selected section so deltas are valid from the first real snapshot
-	void warmup(const Json::Options& options) {
-		if (options.has("cpu")) Cpu::collect();
-		if (options.has("mem")) Mem::collect();
-		if (options.has("net")) Net::collect();
-		if (options.has("proc")) Proc::collect();
-#ifdef GPU_SUPPORT
-		if (options.has("gpu") and Gpu::count > 0) Gpu::collect();
-#endif
-	}
-
 	auto write_output(const Json::Options& options, const string& out) -> bool {
 		if (options.output_file.empty() or options.output_file == "-") {
 			std::cout << out << '\n' << std::flush;
@@ -248,22 +237,10 @@ namespace {
 		return true;
 	}
 
-	//* Fork and detach from the terminal, redirecting std streams to /dev/null
-	auto daemonize_impl(const std::filesystem::path& output_file, const std::optional<std::filesystem::path>& pidfile) -> bool {
-		if (output_file.empty() or output_file == "-") {
-			fmt::println(std::cerr, "error: daemon mode requires a real output file");
-			return false;
-		}
-
-		//? Make sure the output file can be written to before detaching
-		{
-			std::ofstream probe(output_file, std::ios::app);
-			if (not probe.good()) {
-				fmt::println(std::cerr, "error: cannot open output file '{}'", output_file.string());
-				return false;
-			}
-		}
-
+	//* Fork and detach from the terminal, redirecting std streams to /dev/null.
+	//* Returns true in the daemon child. No output file is required here; callers that need one
+	//* must validate it before calling.
+	auto daemonize_process(const std::optional<std::filesystem::path>& pidfile) -> bool {
 		//? Prevent SIGHUP when the controlling terminal closes
 		std::signal(SIGHUP, SIG_IGN);
 
@@ -298,6 +275,16 @@ namespace {
 }
 
 namespace Json {
+
+	auto warmup(const Options& options) -> void {
+		if (options.has("cpu")) Cpu::collect();
+		if (options.has("mem")) Mem::collect();
+		if (options.has("net")) Net::collect();
+		if (options.has("proc")) Proc::collect();
+#ifdef GPU_SUPPORT
+		if (options.has("gpu") and Gpu::count > 0) Gpu::collect();
+#endif
+	}
 
 	auto proc_to_json(const Proc::proc_info& proc) -> std::string {
 		return ::proc_to_json(proc).dump();
@@ -394,9 +381,24 @@ namespace Json {
 	}
 
 	auto daemonize(const Options& options) -> bool {
-		return daemonize_impl(
-			options.output_file,
-			options.pidfile.empty() ? std::nullopt : std::optional { options.pidfile }
-		);
+		if (options.output_file.empty() or options.output_file == "-") {
+			fmt::println(std::cerr, "error: daemon mode requires a real output file");
+			return false;
+		}
+
+		//? Make sure the output file can be written to before detaching
+		{
+			std::ofstream probe(options.output_file, std::ios::app);
+			if (not probe.good()) {
+				fmt::println(std::cerr, "error: cannot open output file '{}'", options.output_file.string());
+				return false;
+			}
+		}
+
+		return daemonize_process(options.pidfile.empty() ? std::nullopt : std::optional { options.pidfile });
+	}
+
+	auto daemonize_process(const std::optional<std::filesystem::path>& pidfile) -> bool {
+		return ::daemonize_process(pidfile);
 	}
 }

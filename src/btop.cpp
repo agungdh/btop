@@ -63,6 +63,7 @@ tab-size = 4
 #include "btop_cli.hpp"
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
+#include "btop_http.hpp"
 #include "btop_input.hpp"
 #include "btop_json.hpp"
 #include "btop_log.hpp"
@@ -96,7 +97,7 @@ namespace Global {
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
 	// Fork version; upstream base is btop v1.4.7
-	const string Version = "0.0.3";
+	const string Version = "0.0.4";
 
 	int coreCount;
 	string overlay;
@@ -936,8 +937,8 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	//? Config init
 	init_config(cli.low_color, cli.filter);
 
-	//? ---------------------------------------------------- JSON MODE --------------------------------------------------
-	if (cli.json_output) {
+	//? ----------------------------------------------- HEADLESS MODES (JSON / HTTP) --------------------------------------
+	if (cli.json_output or cli.http.has_value()) {
 		//? Set fixed "terminal" dimensions so collectors keep a bounded history and produce deltas
 		Term::width = 100;
 		Term::height = 30;
@@ -969,27 +970,47 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		if (cli.output_file.has_value()) json_opts.output_file = cli.output_file.value();
 		if (cli.pidfile.has_value()) json_opts.pidfile = cli.pidfile.value();
 
+		const auto update_ms = (cli.updates.has_value() ? cli.updates.value() : static_cast<std::uint32_t>(Config::getI("update_ms")));
+
+		//? Platform dependent init and error check
+		auto init_shared = []() -> bool {
+			try {
+				Shared::init();
+				return true;
+			}
+			catch (const std::exception& e) {
+				Global::exit_error_msg = fmt::format("Exception in Shared::init() -> {}", e.what());
+				Logger::error("{}", Global::exit_error_msg);
+				fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
+				return false;
+			}
+		};
+
+		//? HTTP server mode
+		if (cli.http.has_value()) {
+			Http::Address address;
+			if (not Http::parse_address(cli.http.value(), address)) {
+				fmt::println(std::cerr, "error: invalid --http address '{}' (expected [addr:]port)", cli.http.value());
+				return 1;
+			}
+
+			//? Daemonize before any collection so forked processes don't inherit thread/async state
+			if (cli.daemon and not Http::daemonize(cli.pidfile)) return 1;
+
+			if (not init_shared()) return 1;
+			return Http::run(json_opts, address, update_ms);
+		}
+
 		//? Daemonize before any collection so forked processes don't inherit thread/async state
 		if (cli.daemon and not Json::daemonize(json_opts)) return 1;
 
-		//? Platform dependent init and error check
-		try {
-			Shared::init();
-		}
-		catch (const std::exception& e) {
-			Global::exit_error_msg = fmt::format("Exception in Shared::init() -> {}", e.what());
-			Logger::error("{}", Global::exit_error_msg);
-			fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
-			return 1;
-		}
-
-		const auto update_ms = (cli.updates.has_value() ? cli.updates.value() : static_cast<std::uint32_t>(Config::getI("update_ms")));
+		if (not init_shared()) return 1;
 		//? Daemon mode always runs forever
 		const auto iterations = (cli.daemon ? 0 : (cli.iterations.has_value() ? cli.iterations.value() : 1));
 
 		return Json::run(json_opts, update_ms, iterations);
 	}
-	//? ------------------------------------------------ END JSON MODE --------------------------------------------------
+	//? --------------------------------------------- END HEADLESS MODES ------------------------------------------------
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not std::string_view { std::setlocale(LC_ALL, "") }.contains(";")
