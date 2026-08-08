@@ -7,6 +7,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      web_version:
+        description: 'btop-web release tag to bundle (e.g. v0.0.2)'
+        required: false
+        default: 'v0.0.2'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.release.tag_name || github.ref_name }}
@@ -37,6 +42,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+      WEB_VERSION: ${{ github.event.inputs.web_version || 'v0.0.2' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,8 +53,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-14 lowdown
 
+      - name: Download btop-web build
+        run: |
+          ARCHIVE="btop-web-${WEB_VERSION}.tar.gz"
+          curl -fsSL -o "$ARCHIVE" "https://github.com/agungdh/btop-web/releases/download/${WEB_VERSION}/${ARCHIVE}"
+          mkdir -p web
+          tar -xzf "$ARCHIVE" -C web
+          test -f web/index.html
+          echo "btop-web ${WEB_VERSION} extracted"
+
       - name: Compile
-        run: make CXX=g++-14 CXXFLAGS=-march=x86-64-v2 STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release
+        run: make CXX=g++-14 CXXFLAGS=-march=x86-64-v2 STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release WEBDIR=web
 
       - name: Package
         run: |
@@ -56,6 +71,7 @@ jobs:
           STAGE="/tmp/stage"
           mkdir -p "$STAGE/bin" "$STAGE/share/btop"
           cp bin/btop "$STAGE/bin/btop"
+          cp -r bin/web "$STAGE/bin/web"
           cp -r themes "$STAGE/share/btop/themes"
           if [ -f btop.1 ]; then
             mkdir -p "$STAGE/share/man/man1"
