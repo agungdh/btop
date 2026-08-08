@@ -78,7 +78,7 @@ PREFIX ?= /usr/local
 
 #? Web UI (btop-web static build). `make web` copies it next to the binary so the HTTP
 #? server can serve it. Override with WEBDIR=path.
-WEBDIR ?= ../btop-web/build
+WEBDIR ?= /home/agungdh/WebstormProjects/btop-web/build
 
 #? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
