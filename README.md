@@ -1586,7 +1586,44 @@ Options:
       --default-config    Print default config to standard output
   -h, --help              Show this help message and exit
   -V, --version           Show a version message and exit (more with --version)
+
+JSON output options (only valid with --json):
+      --json              Headless mode, output system stats as JSON. Does not require a TTY
+  -o, --output <file>     Write JSON output to <file> instead of stdout ('-' for stdout)
+  -n, --iterations <n>    Number of snapshots to write before exiting (0 = run forever, default 1)
+      --daemon            Fork and run in the background as a daemon (requires --output)
+      --pidfile <path>    Write the daemon PID to <path> (only with --daemon)
+      --sections <list>   Comma separated list of sections: cpu,mem,net,proc,gpu (default all)
+      --top-procs <n>     Only output the top <n> processes sorted by cpu usage
+      --pid <pid>         Include detailed information for process <pid>
 ```
+
+#### JSON output mode
+
+`btop --json` runs headless and collects the same data as the TUI, serialized as JSON. It does not
+require a terminal, so it can be used from scripts, cron jobs or as a monitoring daemon. A single
+snapshot waits one update interval (default 2000 ms, see `-u`) so that usage deltas (cpu percent,
+network bandwidth, process cpu) are accurate, similar to `iostat`.
+
+Examples:
+
+```bash
+# One-shot snapshot of everything, pretty printed to stdout
+btop --json
+
+# Only cpu and memory, top 10 processes, one snapshot per second (streams newline-delimited JSON)
+btop --json -u 1000 -n 0 --sections cpu,mem --top-procs 10
+
+# Write a live-updating snapshot file every 2 seconds
+btop --json -u 2000 -o /var/lib/btop/snapshot.json
+
+# Run as a daemon, rewriting the snapshot file forever
+btop --json -u 2000 -o /var/lib/btop/snapshot.json --pidfile /run/btop.pid --daemon
+```
+
+When more than one snapshot is written the output is compact newline-delimited JSON (one snapshot
+per line). Daemon mode rewrites the output file with the latest snapshot on every update; kill it
+with `SIGTERM` or `SIGINT` for a clean shutdown.
 
 ## LICENSE
 

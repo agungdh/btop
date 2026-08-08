@@ -10,6 +10,8 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 **btop** [**-c** _file_] [**-d**] [**-f** _filter_] [**-l**] [**-p** _id_] [**-t**] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
 
+**btop** [**\-\-json** [**-o** _file_] [**-n** _count_] [**\-\-sections** _list_] [**\-\-top-procs** _n_] [**\-\-pid** _pid_] [**\-\-daemon**] [**\-\-pidfile** _path_]]
+
 **btop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
@@ -53,6 +55,42 @@ starting with two dashes ('-'). A summary of options is included below.
 
 **\-\-default-config**
 :   Print default config to standard output.
+
+# JSON OUTPUT OPTIONS
+
+The following options are only valid together with **\-\-json** and run **btop** in a headless
+mode that does not require a terminal. Data is collected with the same collectors as the TUI
+and serialized as JSON. A single snapshot waits one update interval (default 2000 ms, see **-u**)
+so that usage deltas (cpu percent, network bandwidth, process cpu) are accurate, like **iostat**(1).
+When more than one snapshot is written the output is compact newline-delimited JSON (one snapshot
+per line). Daemon mode rewrites the output file with the latest snapshot on every update.
+
+**\-\-json**
+:   Headless mode, output system stats as JSON. Does not require a TTY.
+
+**-o**, **\-\-output _file_**
+:   Write JSON output to _file_ instead of standard output ('-' for standard output).
+
+**-n**, **\-\-iterations _count_**
+:   Number of snapshots to write before exiting. 0 runs forever. Default is 1.
+
+**\-\-daemon**
+:   Fork and run in the background as a daemon. Requires **\-\-output**. The daemon runs forever
+    and rewrites the output file on every update. Kill it with **SIGTERM** or **SIGINT** for a
+    clean shutdown.
+
+**\-\-pidfile _path_**
+:   Write the daemon's PID to _path_. Only used with **\-\-daemon**.
+
+**\-\-sections _list_**
+:   Comma separated list of sections to collect and output: cpu, mem, net, proc, gpu. Default is
+    all available sections.
+
+**\-\-top-procs _n_**
+:   Only output the top _n_ processes, sorted by cpu usage.
+
+**\-\-pid _pid_**
+:   Include detailed information for the process with the given pid.
 
 **-h**, **\-\-help**
 :   Show summary of options.

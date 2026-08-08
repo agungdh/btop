@@ -191,10 +191,126 @@ namespace Cli {
 				}
 				continue;
 			}
+			if (arg == "--json") {
+				cli.json_output = true;
+				continue;
+			}
+			if (arg == "-o" || arg == "--output") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Output requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				cli.output_file = std::make_optional(stdfs::path { arg });
+				continue;
+			}
+			if (arg == "-n" || arg == "--iterations") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Iterations requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				try {
+					cli.iterations = std::make_optional(std::max(std::stoi(arg.data()), 0));
+				} catch (std::invalid_argument& e) {
+					error("Iterations must be a positive number");
+					return std::unexpected { 1 };
+				} catch (std::out_of_range& e) {
+					error(fmt::format("Iterations argument is out of range: {}", arg.data()));
+					return std::unexpected { 1 };
+				}
+				continue;
+			}
+			if (arg == "--daemon") {
+				cli.daemon = true;
+				continue;
+			}
+			if (arg == "--pidfile") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Pidfile requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				cli.pidfile = std::make_optional(stdfs::path { arg });
+				continue;
+			}
+			if (arg == "--sections") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Sections requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				cli.sections = std::make_optional(arg);
+				continue;
+			}
+			if (arg == "--top-procs") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Top procs requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				try {
+					cli.top_procs = std::make_optional(std::max(std::stoi(arg.data()), 1));
+				} catch (std::invalid_argument& e) {
+					error("Top procs must be a positive number");
+					return std::unexpected { 1 };
+				} catch (std::out_of_range& e) {
+					error(fmt::format("Top procs argument is out of range: {}", arg.data()));
+					return std::unexpected { 1 };
+				}
+				continue;
+			}
+			if (arg == "--pid") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Pid requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				try {
+					cli.pid = std::make_optional(std::max(std::stoi(arg.data()), 1));
+				} catch (std::invalid_argument& e) {
+					error("Pid must be a positive number");
+					return std::unexpected { 1 };
+				} catch (std::out_of_range& e) {
+					error(fmt::format("Pid argument is out of range: {}", arg.data()));
+					return std::unexpected { 1 };
+				}
+				continue;
+			}
 
 			error(fmt::format("Unknown argument '{}{}{}'", YELLOW, arg, RESET));
 			return std::unexpected { 1 };
 		}
+
+		//? Validate that JSON-only flags are used together with --json
+		if (not cli.json_output and (cli.output_file.has_value() or cli.iterations.has_value() or cli.daemon
+			or cli.pidfile.has_value() or cli.sections.has_value() or cli.top_procs.has_value() or cli.pid.has_value())) {
+			error("Options --output, --iterations, --daemon, --pidfile, --sections, --top-procs and --pid can only be used together with --json");
+			return std::unexpected { 1 };
+		}
+
+		//? Daemon mode requires an output file
+		if (cli.daemon and not cli.output_file.has_value()) {
+			error("--daemon requires an output file (use --output <file>)");
+			return std::unexpected { 1 };
+		}
+		if (cli.daemon and cli.output_file.has_value() and cli.output_file.value() == "-") {
+			error("--daemon can't write to stdout, use --output <file>");
+			return std::unexpected { 1 };
+		}
+
 		return cli;
 	}
 
@@ -261,7 +377,16 @@ namespace Cli {
 			"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
 			"  {2}    --default-config{1}    Print default config to standard output\n"
 			"  {2}-h, --help{1}              Show this help message and exit\n"
-			"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
+			"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n"
+			"{0}JSON output options:{1}\n"
+			"  {2}    --json{1}              Headless mode, output system stats as JSON. Does not require a TTY\n"
+			"  {2}-o, --output{1} <file>     Write JSON output to <file> instead of stdout ('-' for stdout)\n"
+			"  {2}-n, --iterations{1} <n>    Number of snapshots to write before exiting (0 = run forever, default 1)\n"
+			"  {2}    --daemon{1}            Fork and run in the background as a daemon (requires --output)\n"
+			"  {2}    --pidfile{1} <path>    Write the daemon PID to <path> (only with --daemon)\n"
+			"  {2}    --sections{1} <list>   Comma separated list of sections: cpu,mem,net,proc,gpu (default all)\n"
+			"  {2}    --top-procs{1} <n>     Only output the top <n> processes sorted by cpu usage\n"
+			"  {2}    --pid{1} <pid>         Include detailed information for process <pid>\n",
 			BOLD_UNDERLINE, RESET, BOLD
 		);
 	}

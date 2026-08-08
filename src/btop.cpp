@@ -64,6 +64,7 @@ tab-size = 4
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
 #include "btop_input.hpp"
+#include "btop_json.hpp"
 #include "btop_log.hpp"
 #include "btop_menu.hpp"
 #include "btop_shared.hpp"
@@ -933,6 +934,61 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	//? Config init
 	init_config(cli.low_color, cli.filter);
+
+	//? ---------------------------------------------------- JSON MODE --------------------------------------------------
+	if (cli.json_output) {
+		//? Set fixed "terminal" dimensions so collectors keep a bounded history and produce deltas
+		Term::width = 100;
+		Term::height = 30;
+		Cpu::width = 100;
+		Cpu::height = 20;
+		Mem::width = 100;
+		Mem::height = 20;
+		Net::width = 100;
+		Net::height = 20;
+		Proc::width = 100;
+		Proc::height = 20;
+#ifdef GPU_SUPPORT
+		Gpu::width = 100;
+#endif
+
+		//? Build output options
+		Json::Options json_opts;
+		if (cli.sections.has_value()) {
+			for (const auto& section : ssplit(cli.sections.value(), ',')) json_opts.sections.push_back(section);
+		}
+		else {
+			json_opts.sections = {"cpu", "mem", "net", "proc"};
+#ifdef GPU_SUPPORT
+			json_opts.sections.push_back("gpu");
+#endif
+		}
+		json_opts.pid = cli.pid;
+		json_opts.top_procs = cli.top_procs;
+		if (cli.output_file.has_value()) json_opts.output_file = cli.output_file.value();
+		if (cli.pidfile.has_value()) json_opts.pidfile = cli.pidfile.value();
+
+		//? Daemonize before any collection so forked processes don't inherit thread/async state
+		if (cli.daemon and not Json::daemonize(json_opts)) return 1;
+
+		//? Platform dependent init and error check
+		try {
+			Shared::init();
+		}
+		catch (const std::exception& e) {
+			Global::exit_error_msg = fmt::format("Exception in Shared::init() -> {}", e.what());
+			Logger::error("{}", Global::exit_error_msg);
+			fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
+			return 1;
+		}
+
+		const auto update_ms = (cli.updates.has_value() ? cli.updates.value() : static_cast<std::uint32_t>(Config::getI("update_ms")));
+		//? Daemon mode always runs forever
+		const auto iterations = (cli.daemon ? 0 : (cli.iterations.has_value() ? cli.iterations.value() : 1));
+
+		return Json::run(json_opts, update_ms, iterations);
+	}
+	//? ------------------------------------------------ END JSON MODE --------------------------------------------------
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not std::string_view { std::setlocale(LC_ALL, "") }.contains(";")

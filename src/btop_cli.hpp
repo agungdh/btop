@@ -32,6 +32,22 @@ namespace Cli {
 		std::optional<stdfs::path> themes_dir;
 		// The initial refresh rate
 		std::optional<std::uint32_t> updates;
+		// Headless JSON output mode (no TTY required)
+		bool json_output {};
+		// Path to write JSON output to instead of stdout ('-' for stdout)
+		std::optional<stdfs::path> output_file;
+		// Number of JSON snapshots to write (0 = run forever)
+		std::optional<std::uint32_t> iterations;
+		// Fork and run in the background as a daemon (requires --output)
+		bool daemon {};
+		// Path to write the daemon PID to (only with --daemon)
+		std::optional<stdfs::path> pidfile;
+		// Comma separated list of sections to collect (cpu,mem,net,proc,gpu)
+		std::optional<std::string> sections;
+		// Only output the top N processes sorted by cpu usage
+		std::optional<std::uint32_t> top_procs;
+		// Include detailed information for a single process
+		std::optional<std::uint32_t> pid;
 	};
 
 	using Result = std::expected<Cli, std::int32_t>;
