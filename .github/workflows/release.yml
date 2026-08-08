@@ -23,8 +23,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 lowdown
+
       - name: Compile
-        run: make CXXFLAGS=-march=x86-64-v2 STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release
+        run: make CXX=g++-14 CXXFLAGS=-march=x86-64-v2 STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release
 
       - name: Package
         run: |
