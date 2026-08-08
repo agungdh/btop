@@ -99,9 +99,8 @@ per line). Daemon mode rewrites the output file with the latest snapshot on ever
 The following options start **btop** as a headless HTTP server that does not require a terminal.
 The same collectors as the TUI and the JSON mode run in a background thread, collecting a snapshot
 every update interval (default 2000 ms, see **-u**). The latest snapshot is served at
-`GET /api/json` (one-shot) and every new snapshot is pushed over Server-Sent Events at
-`GET /api/stream`. All responses include `Access-Control-Allow-Origin: *`. Kill the server with
-**SIGTERM** or **SIGINT** for a clean shutdown.
+`GET /api/json` (one-shot). All responses include `Access-Control-Allow-Origin: *`. Kill the server
+with **SIGTERM** or **SIGINT** for a clean shutdown.
 
 **\-\-http [_addr_:port]**
 :   Start the HTTP server, defaulting to `127.0.0.1:8080`. The value may be `host:port`, `:port`

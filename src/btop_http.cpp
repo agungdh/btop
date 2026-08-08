@@ -121,8 +121,8 @@ namespace {
 				}
 				if (quit_ or g_quit.load()) break;
 
-				//? A transient collection failure must not kill the sampler thread, otherwise every
-				//? SSE client would hang forever waiting for a snapshot that never arrives.
+				//? A transient collection failure must not kill the sampler thread, otherwise
+				//? /api/json clients would hang forever waiting for a snapshot that never arrives.
 				try {
 					const string out = Json::snapshot(options_, false);
 					{
@@ -203,7 +203,6 @@ namespace Http {
 				{ "endpoints", json::array({
 					json { { "method", "GET" }, { "path", "/healthz" }, { "description", "Liveness probe" } },
 					json { { "method", "GET" }, { "path", "/api/json" }, { "description", "Latest collected snapshot as JSON" } },
-					json { { "method", "GET" }, { "path", "/api/stream" }, { "description", "Server-Sent Events stream of snapshots" } },
 				}) },
 			};
 			res.set_content(root.dump(2), "application/json");
@@ -232,25 +231,6 @@ namespace Http {
 			res.set_content(snap.value().first, "application/json");
 		});
 
-		//? Continuous: SSE stream of snapshots
-		svr.Get("/api/stream", [&sampler](const httplib::Request&, httplib::Response& res) {
-			res.set_header("Cache-Control", "no-cache");
-			res.set_header("Connection", "keep-alive");
-			res.set_header("X-Accel-Buffering", "no");
-			std::uint64_t last_seq = 0;
-			res.set_chunked_content_provider(
-				"text/event-stream",
-				[&sampler, last_seq](const std::size_t, httplib::DataSink& sink) mutable -> bool {
-					const auto snap = sampler.wait_next(last_seq);
-					if (not snap.has_value()) return false;
-					last_seq = snap.value().second;
-					const string msg = "event: snapshot\nid: " + std::to_string(last_seq) + "\ndata: " + snap.value().first + "\n\n";
-					return sink.write(msg.data(), msg.size());
-				},
-				nullptr
-			);
-		});
-
 		const bool ephemeral = (address.port == 0);
 		if (ephemeral) {
 			const int actual_port = svr.bind_to_any_port(address.host);
@@ -272,8 +252,8 @@ namespace Http {
 
 		std::thread listen_thread { [&svr] { svr.listen_after_bind(); } };
 
-		//? Wait for shutdown signal, then stop the sampler (which releases blocked SSE handlers)
-		//? before stopping the accept loop.
+		//? Wait for shutdown signal, then stop the sampler (which releases blocked /api/json
+		//? handlers) before stopping the accept loop.
 		while (not g_quit.load()) Tools::sleep_ms(100);
 		sampler.shutdown();
 		svr.stop();

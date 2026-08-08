@@ -426,9 +426,8 @@ namespace Cli {
 			"  {2}    --top-procs{1} <n>     Only output the top <n> processes sorted by cpu usage\n"
 			"  {2}    --pid{1} <pid>         Include detailed information for process <pid>\n"
 			"{0}HTTP server options:{1}\n"
-			"  {2}    --http{1} [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json)\n"
-			"                                    and a continuous SSE stream (GET /api/stream). Does not\n"
-			"                                    require a TTY. Default address 127.0.0.1:8080\n",
+			"  {2}    --http{1} [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json).\n"
+			"                                    Does not require a TTY. Default address 127.0.0.1:8080\n",
 			BOLD_UNDERLINE, RESET, BOLD
 		);
 	}

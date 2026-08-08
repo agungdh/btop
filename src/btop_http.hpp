@@ -11,7 +11,7 @@
 #include "btop_json.hpp"
 
 //* Headless HTTP server mode, serves collected system stats as JSON (one-shot)
-//* and over Server-Sent Events (continuous) without requiring a terminal.
+//* without requiring a terminal.
 namespace Http {
 
 	//* Listen address: host to bind to and TCP port.
@@ -31,6 +31,6 @@ namespace Http {
 	bool daemonize(const std::optional<std::filesystem::path>& pidfile);
 
 	//* Run the headless HTTP server: a background thread collects snapshots at <update_ms> intervals
-	//* while HTTP handlers serve the latest snapshot and an SSE stream of new snapshots.
+	//* while HTTP handlers serve the latest cached snapshot.
 	int run(const Json::Options& options, const Address& address, std::uint32_t update_ms);
 }

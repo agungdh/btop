@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 # Smoke test for the headless HTTP server mode: starts btop on an ephemeral port,
-# checks the /healthz, /api/json and /api/stream endpoints, then verifies graceful
-# shutdown on SIGTERM.
+# checks the /healthz and /api/json endpoints, verifies /api/stream is gone, then checks
+# graceful shutdown on SIGTERM.
 
 set -u
 
@@ -66,9 +66,9 @@ echo "$JSON" | grep -q '"cpu"' || fail "/api/json missing cpu"
 echo "$JSON" | grep -q '"mem"' || fail "/api/json missing mem"
 echo "$JSON" | grep -q '"proc"' && fail "/api/json should not include proc"
 
-# /api/stream: the first snapshot event must arrive
-EVENT="$(curl -sN --max-time 10 "$BASE/api/stream" 2>/dev/null | head -c 400)"
-echo "$EVENT" | grep -q "event: snapshot" || fail "/api/stream missing snapshot event"
+# /api/stream must be gone (removed): expect a 404
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/stream")"
+[ "$CODE" = "404" ] || fail "GET /api/stream expected 404, got $CODE"
 
 # Graceful shutdown on SIGTERM
 kill -TERM "$PID" 2>/dev/null || fail "could not send SIGTERM"

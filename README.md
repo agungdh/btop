@@ -213,7 +213,7 @@ Resource monitor that shows usage and stats for processor, memory, disks, networ
 
 C++ version and continuation of [bashtop](https://github.com/aristocratos/bashtop) and [bpytop](https://github.com/aristocratos/bpytop).
 
-This fork (v0.1.1) is based on upstream [btop](https://github.com/aristocratos/btop) v1.4.7 and adds a headless [JSON output mode](#json-output-mode) and an [HTTP server mode](#http-server-mode) so btop can be used from scripts, cron jobs, or as a monitoring daemon/backend without a terminal.
+This fork (v0.2.0) is based on upstream [btop](https://github.com/aristocratos/btop) v1.4.7 and adds a headless [JSON output mode](#json-output-mode) and an [HTTP server mode](#http-server-mode) so btop can be used from scripts, cron jobs, or as a monitoring daemon/backend without a terminal.
 
 ## Features
 
@@ -233,7 +233,7 @@ This fork (v0.1.1) is based on upstream [btop](https://github.com/aristocratos/b
 * Selectable symbols for the graphs.
 * Custom presets
 * Headless JSON output mode with daemon support (`btop --json`)
-* Headless HTTP server mode with JSON and SSE endpoints (`btop --http`)
+* Headless HTTP server mode (`btop --http`)
 * And more...
 
 ## Themes
@@ -1329,7 +1329,7 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 #### btop.conf: (auto generated if not found)
 
 ```toml
-#? Config file for btop v.0.1.1
+#? Config file for btop v.0.2.0
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
@@ -1601,9 +1601,8 @@ JSON output options (--json, shared flags also work with --http):
       --pid <pid>         Include detailed information for process <pid>
 
 HTTP server options (only valid with --http):
-      --http [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json) and a
-                              continuous SSE stream (GET /api/stream). Does not require a TTY.
-                              Default address 127.0.0.1:8080
+      --http [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json).
+                              Does not require a TTY. Default address 127.0.0.1:8080
 ```
 
 #### JSON output mode
@@ -1648,13 +1647,11 @@ Endpoints:
 | GET    | `/healthz`    | Liveness probe, returns `{"status":"ok"}`                  |
 | GET    | `/`           | JSON index with version, uptime and endpoint list          |
 | GET    | `/api/json`   | Latest collected snapshot as JSON (one-shot)               |
-| GET    | `/api/stream` | Server-Sent Events stream, one `snapshot` event per update |
 
 All responses include `Access-Control-Allow-Origin: *`. A background thread collects a snapshot
 every update interval (`-u`, default 2000 ms) and caches it; `GET /api/json` returns the cached
-snapshot (the first request waits one update interval so usage deltas are valid, like `--json`),
-while `GET /api/stream` pushes every new snapshot. The `--sections`, `--top-procs`, `--pid`,
-`--daemon` and `--pidfile` options work here too.
+snapshot (the first request waits one update interval so usage deltas are valid, like `--json`).
+The `--sections`, `--top-procs`, `--pid`, `--daemon` and `--pidfile` options work here too.
 
 Examples:
 
@@ -1662,24 +1659,11 @@ Examples:
 # One-shot snapshot over HTTP
 curl -s http://127.0.0.1:8080/api/json
 
-# Stream snapshots (one per update interval)
-curl -N http://127.0.0.1:8080/api/stream
-
 # Bind to all interfaces and refresh every 500 ms
 btop --http 0.0.0.0:8080 -u 500
 
 # Run as a daemon
 btop --http 127.0.0.1:8080 --daemon --pidfile /run/btop.pid
-```
-
-Consuming the stream from a browser frontend:
-
-```js
-const source = new EventSource("http://127.0.0.1:8080/api/stream");
-source.addEventListener("snapshot", (e) => {
-  const data = JSON.parse(e.data);
-  console.log(data.cpu.percent["total"], data.mem.stats);
-});
 ```
 
 Binding to anything other than `127.0.0.1` exposes the metrics unauthenticated; keep the server on
