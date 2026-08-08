@@ -132,6 +132,50 @@ TEST(json, cli_parse_json_flags_require_json) {
 	}
 }
 
+TEST(json, cli_parse_non_terminated_string_view) {
+	//? Regression: parsing used std::stoi(arg.data()) which reads until a null
+	//? terminator. Values arriving as substrings (not null-terminated) must parse
+	//? correctly without reading out of bounds.
+	std::string buf = "xx500zz";
+	const std::string_view update { buf.data() + 2, 3 };
+	const std::vector<std::string_view> args { "--json", "-u", update };
+	auto result = Cli::parse(args);
+	ASSERT_TRUE(result.has_value());
+	ASSERT_TRUE(result.value().updates.has_value());
+	EXPECT_EQ(result.value().updates.value(), 500);
+}
+
+TEST(json, cli_parse_unknown_section_rejected) {
+	for (const auto& sections : std::vector<std::string_view> { "cpu,bogus", "bogus", "cpu,mem,net,proc,foo" }) {
+		const std::vector<std::string_view> args { "--json", "--sections", sections };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value()) << "expected error for sections: " << sections;
+		EXPECT_NE(result.error(), 0);
+	}
+}
+
+TEST(json, cli_parse_empty_section_rejected) {
+	const std::vector<std::string_view> args { "--json", "--sections", "cpu,mem,,net" };
+	auto result = Cli::parse(args);
+	EXPECT_FALSE(result.has_value());
+	EXPECT_NE(result.error(), 0);
+}
+
+#ifdef GPU_SUPPORT
+TEST(json, cli_parse_gpu_section_ok) {
+	const std::vector<std::string_view> args { "--json", "--sections", "gpu" };
+	auto result = Cli::parse(args);
+	ASSERT_TRUE(result.has_value());
+}
+#else
+TEST(json, cli_parse_gpu_section_rejected_without_support) {
+	const std::vector<std::string_view> args { "--json", "--sections", "gpu" };
+	auto result = Cli::parse(args);
+	EXPECT_FALSE(result.has_value());
+	EXPECT_NE(result.error(), 0);
+}
+#endif
+
 TEST(json, cli_parse_daemon_requires_output) {
 	{
 		const std::vector<std::string_view> args { "--json", "--daemon" };

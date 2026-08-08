@@ -4,9 +4,11 @@
 
 #include <csignal>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <system_error>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -44,6 +46,22 @@ namespace {
 		for (const auto& value : container) arr.push_back(value);
 		return arr;
 	}
+
+	//* Restores show_detailed/detailed_pid config values on scope exit so a snapshot
+	//* request never leaves the global config cache permanently modified.
+	class ConfigGuard {
+		bool show_detailed_ {};
+		int detailed_pid_ {};
+	public:
+		ConfigGuard(const bool show_detailed, const int detailed_pid)
+			: show_detailed_(show_detailed), detailed_pid_(detailed_pid) {}
+		~ConfigGuard() {
+			Config::set("show_detailed", show_detailed_);
+			Config::set("detailed_pid", detailed_pid_);
+		}
+		ConfigGuard(const ConfigGuard&) = delete;
+		ConfigGuard& operator=(const ConfigGuard&) = delete;
+	};
 
 	//* Serialize a map of string -> deque to a JSON object of arrays
 	auto percent_map_to_json(const std::unordered_map<string, std::deque<long long>>& map) -> json {
@@ -230,10 +248,22 @@ namespace {
 			std::cout << out << '\n' << std::flush;
 			return true;
 		}
-		std::ofstream of(options.output_file, std::ios::trunc);
+
+		//? Write to a temporary file and atomically rename it into place so a concurrent
+		//? reader never observes a truncated or partially written snapshot.
+		const auto tmp_path = std::filesystem::path { options.output_file.string() + ".tmp" };
+		std::ofstream of(tmp_path, std::ios::trunc);
 		if (not of.good()) return false;
 		of << out << '\n';
 		of.close();
+		if (not of.good()) return false;
+
+		std::error_code ec;
+		std::filesystem::rename(tmp_path, options.output_file, ec);
+		if (ec) {
+			std::filesystem::remove(tmp_path, ec);
+			return false;
+		}
 		return true;
 	}
 
@@ -343,6 +373,11 @@ namespace Json {
 
 		//? PROC
 		if (options.has("proc")) {
+			//? Temporarily enable detailed info for the requested pid, restoring the previous
+			//? values afterwards so the global config cache is not left modified. The collector
+			//? only re-reads /proc/<pid>/smaps when the pid changes, so this stays cheap on
+			//? subsequent snapshots.
+			ConfigGuard config_guard { Config::getB("show_detailed"), Config::getI("detailed_pid") };
 			if (options.pid.has_value()) {
 				Config::set("show_detailed", true);
 				Config::set("detailed_pid", static_cast<int>(options.pid.value()));

@@ -13,6 +13,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    name: unit + smoke tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 curl
+
+      - name: Build and run tests
+        run: |
+          cmake -S . -B build -DCMAKE_CXX_COMPILER=g++-14 -DBUILD_TESTING=ON -DBTOP_GPU=ON
+          cmake --build build -j
+          ctest --test-dir build --output-on-failure
+
   build:
     name: x86_64 gpu
     runs-on: ubuntu-24.04

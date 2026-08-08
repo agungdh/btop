@@ -74,6 +74,19 @@ namespace {
 			return std::make_pair(latest_json_, latest_seq_);
 		}
 
+		//? True only if collection failed before any snapshot was ever produced. Once at least one
+		//? snapshot exists a transient later failure still lets clients read the latest cached one.
+		[[nodiscard]] auto failed() const -> bool {
+			std::lock_guard lock { mtx_ };
+			return latest_seq_ == 0 and not last_error_.empty();
+		}
+
+		//? Human readable description of the last collection error, or an empty string.
+		[[nodiscard]] auto error_message() -> string {
+			std::lock_guard lock { mtx_ };
+			return last_error_;
+		}
+
 		void shutdown() {
 			{
 				std::lock_guard lock { mtx_ };
@@ -86,7 +99,19 @@ namespace {
 
 	private:
 		void run() {
-			Json::warmup(options_);
+			//? A failed warmup means no deltas can ever be computed; record the error and stop
+			//? so /api/json can report it instead of hanging clients.
+			try {
+				Json::warmup(options_);
+			}
+			catch (const std::exception& e) {
+				Logger::error("Sampler: warmup failed: {}", e.what());
+				{
+					std::lock_guard lock { mtx_ };
+					last_error_ = fmt::format("warmup failed: {}", e.what());
+				}
+				return;
+			}
 
 			//? Sleep in small increments so shutdown stays responsive even with a large update interval.
 			while (not quit_ and not g_quit.load()) {
@@ -96,23 +121,36 @@ namespace {
 				}
 				if (quit_ or g_quit.load()) break;
 
-				const string out = Json::snapshot(options_, false);
-				{
-					std::lock_guard lock { mtx_ };
-					latest_json_ = out;
-					++latest_seq_;
+				//? A transient collection failure must not kill the sampler thread, otherwise every
+				//? SSE client would hang forever waiting for a snapshot that never arrives.
+				try {
+					const string out = Json::snapshot(options_, false);
+					{
+						std::lock_guard lock { mtx_ };
+						latest_json_ = out;
+						++latest_seq_;
+						last_error_.clear();
+					}
+					cv_.notify_all();
 				}
-				cv_.notify_all();
+				catch (const std::exception& e) {
+					Logger::error("Sampler: snapshot failed: {}", e.what());
+					{
+						std::lock_guard lock { mtx_ };
+						last_error_ = fmt::format("snapshot failed: {}", e.what());
+					}
+				}
 			}
 		}
 
 		Json::Options options_;
 		std::uint32_t update_ms_ {};
 		std::thread thread_ {};
-		std::mutex mtx_ {};
+		mutable std::mutex mtx_ {};
 		std::condition_variable cv_ {};
 		string latest_json_ {};
 		std::uint64_t latest_seq_ = 0;
+		string last_error_ {};
 		bool quit_ = false;
 	};
 }
@@ -178,6 +216,13 @@ namespace Http {
 
 		//? One-shot: latest cached snapshot
 		svr.Get("/api/json", [&sampler](const httplib::Request&, httplib::Response& res) {
+			//? If collection has failed so far, report the error instead of blocking the request
+			//? forever waiting for a snapshot that may never come.
+			if (sampler.failed()) {
+				res.status = httplib::StatusCode::ServiceUnavailable_503;
+				res.set_content(json { { "error", sampler.error_message() } }.dump(), "application/json");
+				return;
+			}
 			const auto snap = sampler.wait_next(0);
 			if (not snap.has_value()) {
 				res.status = httplib::StatusCode::ServiceUnavailable_503;

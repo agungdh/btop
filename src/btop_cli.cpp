@@ -3,6 +3,8 @@
 #include "btop_cli.hpp"
 
 #include <algorithm>
+#include <array>
+#include <charconv>
 #include <expected>
 #include <filesystem>
 #include <iterator>
@@ -12,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include <unistd.h>
 
@@ -49,6 +52,23 @@ static void build_info() noexcept {
 
 static void error(std::string_view msg) noexcept {
 	fmt::println("{}error:{} {}\n", BOLD_RED, RESET, msg);
+}
+
+//* Parse a non-negative integer from a string_view that may not be null-terminated
+//* (unlike std::stoi). Prints an error message for <name> and returns nullopt on
+//* malformed or out of range input.
+static auto parse_uint(const std::string_view value, const std::string_view name) -> std::optional<int> {
+	int out = 0;
+	const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), out);
+	if (ec == std::errc::result_out_of_range) {
+		error(fmt::format("{} argument is out of range: {}", name, value));
+		return std::nullopt;
+	}
+	if (ec != std::errc() or ptr != value.data() + value.size()) {
+		error(fmt::format("{} must be a positive number", name));
+		return std::nullopt;
+	}
+	return out;
 }
 
 namespace Cli {
@@ -142,16 +162,9 @@ namespace Cli {
 				}
 
 				auto arg = *it;
-				try {
-					auto preset_id = std::clamp(std::stoi(arg.data()), 0, 9);
-					cli.preset = std::make_optional(preset_id);
-				} catch (std::invalid_argument& e) {
-					error("Preset must be a positive number");
-					return std::unexpected { 1 };
-				} catch (std::out_of_range& e) {
-					error(fmt::format("Preset argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
-				}
+				const auto preset = parse_uint(arg, "Preset");
+				if (not preset.has_value()) return std::unexpected { 1 };
+				cli.preset = std::make_optional(std::clamp(preset.value(), 0, 9));
 				continue;
 			}
 			if (arg == "--themes-dir") {
@@ -180,16 +193,9 @@ namespace Cli {
 				}
 
 				auto arg = *it;
-				try {
-					auto refresh_rate = std::max(std::stoi(arg.data()), 100);
-					cli.updates = refresh_rate;
-				} catch (std::invalid_argument& e) {
-					error("Update must be a positive number");
-					return std::unexpected { 1 };
-				} catch (std::out_of_range& e) {
-					error(fmt::format("Update argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
-				}
+				const auto refresh = parse_uint(arg, "Update");
+				if (not refresh.has_value()) return std::unexpected { 1 };
+				cli.updates = std::max(refresh.value(), 100);
 				continue;
 			}
 			if (arg == "--json") {
@@ -230,15 +236,9 @@ namespace Cli {
 				}
 
 				auto arg = *it;
-				try {
-					cli.iterations = std::make_optional(std::max(std::stoi(arg.data()), 0));
-				} catch (std::invalid_argument& e) {
-					error("Iterations must be a positive number");
-					return std::unexpected { 1 };
-				} catch (std::out_of_range& e) {
-					error(fmt::format("Iterations argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
-				}
+				const auto iterations = parse_uint(arg, "Iterations");
+				if (not iterations.has_value()) return std::unexpected { 1 };
+				cli.iterations = std::make_optional(std::max(iterations.value(), 0));
 				continue;
 			}
 			if (arg == "--daemon") {
@@ -275,15 +275,9 @@ namespace Cli {
 				}
 
 				auto arg = *it;
-				try {
-					cli.top_procs = std::make_optional(std::max(std::stoi(arg.data()), 1));
-				} catch (std::invalid_argument& e) {
-					error("Top procs must be a positive number");
-					return std::unexpected { 1 };
-				} catch (std::out_of_range& e) {
-					error(fmt::format("Top procs argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
-				}
+				const auto top = parse_uint(arg, "Top procs");
+				if (not top.has_value()) return std::unexpected { 1 };
+				cli.top_procs = std::make_optional(std::max(top.value(), 1));
 				continue;
 			}
 			if (arg == "--pid") {
@@ -294,20 +288,36 @@ namespace Cli {
 				}
 
 				auto arg = *it;
-				try {
-					cli.pid = std::make_optional(std::max(std::stoi(arg.data()), 1));
-				} catch (std::invalid_argument& e) {
-					error("Pid must be a positive number");
-					return std::unexpected { 1 };
-				} catch (std::out_of_range& e) {
-					error(fmt::format("Pid argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
-				}
+				const auto pid = parse_uint(arg, "Pid");
+				if (not pid.has_value()) return std::unexpected { 1 };
+				cli.pid = std::make_optional(std::max(pid.value(), 1));
 				continue;
 			}
 
 			error(fmt::format("Unknown argument '{}{}{}'", YELLOW, arg, RESET));
 			return std::unexpected { 1 };
+		}
+
+		//? Validate --sections against the known set of sections
+		if (cli.sections.has_value()) {
+			static constexpr std::array valid_sections = { "cpu"sv, "mem"sv, "net"sv, "proc"sv, "gpu"sv };
+			for (const auto section : std::views::split(cli.sections.value(), ',')) {
+				const auto name = std::string_view { section };
+				if (name.empty()) {
+					error("--sections contains an empty entry (expected cpu,mem,net,proc,gpu)");
+					return std::unexpected { 1 };
+				}
+				if (std::ranges::find(valid_sections, name) == valid_sections.end()) {
+					error(fmt::format("Unknown section '{}' (valid: cpu, mem, net, proc, gpu)", name));
+					return std::unexpected { 1 };
+				}
+			#ifndef GPU_SUPPORT
+				if (name == "gpu"sv) {
+					error("Section 'gpu' requires a build with GPU support");
+					return std::unexpected { 1 };
+				}
+			#endif
+			}
 		}
 
 		//? Validate that headless-only flags are used together with --json or --http
