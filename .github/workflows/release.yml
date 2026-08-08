@@ -1,0 +1,74 @@
+name: Release
+
+permissions:
+  contents: write # Required to upload assets to the GitHub Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          # Static musl build: fully static, runs on any x86_64 Linux. GPU support is
+          # automatically disabled when linking statically (dlopen doesn't work).
+          - name: musl
+            toolchain: x86_64-unknown-linux-musl
+            cxx: /opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-g++
+            makeflags: STATIC=true STRIP=true BUILD_TYPE=Release
+            artifact: btop-x86_64-linux-musl
+          # Dynamic glibc build: GPU support (NVIDIA/AMD/Intel) enabled via dlopen.
+          - name: gpu
+            toolchain: ""
+            cxx: g++
+            makeflags: STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release
+            artifact: btop-x86_64-linux-gnu
+    env:
+      VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install musl cross toolchain
+        if: matrix.toolchain != ''
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz.sha256
+          echo "$(cat /tmp/${TOOLCHAIN}.tar.xz.sha256) /tmp/${TOOLCHAIN}.tar.xz" | sha256sum --check --status
+          mkdir -p /opt/x-tools/
+          tar -xf /tmp/${TOOLCHAIN}.tar.xz -C /opt/x-tools
+
+      - name: Compile
+        run: CXX=${{ matrix.cxx }} make CXXFLAGS=-march=x86-64-v2 ${{ matrix.makeflags }}
+
+      - name: Package
+        run: |
+          ARCHIVE="${{ matrix.artifact }}-${VERSION}"
+          STAGE="/tmp/stage-${{ matrix.name }}"
+          mkdir -p "$STAGE/bin" "$STAGE/share/btop"
+          cp bin/btop "$STAGE/bin/btop"
+          cp -r themes "$STAGE/share/btop/themes"
+          if [ -f btop.1 ]; then
+            mkdir -p "$STAGE/share/man/man1"
+            cp btop.1 "$STAGE/share/man/man1/"
+          fi
+          tar -czf "${ARCHIVE}.tar.gz" -C "$STAGE" .
+          sha256sum "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256"
+          ls -lh "${ARCHIVE}.tar.gz"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$VERSION" ${{ matrix.artifact }}-${VERSION}.tar.gz ${{ matrix.artifact }}-${VERSION}.tar.gz.sha256 --clobber
