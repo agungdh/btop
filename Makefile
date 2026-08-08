@@ -76,6 +76,10 @@ OLDLD := $(LDFLAGS)
 
 PREFIX ?= /usr/local
 
+#? Web UI (btop-web static build) to install to $(PREFIX)/share/btop/web, if present.
+#? Override with WEBDIR=path or build btop-web and run `make install`.
+WEBDIR ?= ../btop-web/build
+
 #? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
 ifneq ($(filter unknown Darwin, $(PLATFORM)),)
@@ -368,6 +372,13 @@ install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@$(call green,Installing themes to: $(WHITE)$(DESTDIR)$(PREFIX)/share/btop/themes)
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
+ifneq ($(wildcard $(WEBDIR)/index.html),)
+	@$(call green,Installing web UI to: $(WHITE)$(DESTDIR)$(PREFIX)/share/btop/web)
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop/web
+	@cp -pr $(WEBDIR)/. $(DESTDIR)$(PREFIX)/share/btop/web
+else
+	@$(call yellow,No web UI build at '$(WEBDIR)': skipping web UI install)
+endif
 	@$(call green,Installing desktop entry to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/applications/btop.desktop)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
 	@cp -p btop.desktop $(DESTDIR)$(PREFIX)/share/applications/btop.desktop

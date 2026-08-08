@@ -6,9 +6,12 @@
 #include <condition_variable>
 #include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
@@ -23,6 +26,8 @@
 #include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
+
+namespace fs = std::filesystem;
 
 using nlohmann::json;
 using std::string;
@@ -187,6 +192,44 @@ namespace Http {
 		Sampler sampler { options, update_ms };
 		sampler.start();
 
+		//? Locate the bundled web UI (btop-web static build) so the SPA can be served
+		//? alongside the API. Resolution order: $BTOP_WEB_DIR > <binary>/../share/btop/web
+		//? > /usr/[local/]share/btop/web. Everything is served same-origin, so the UI
+		//? adapts to whatever port btop ends up binding.
+		std::string web_app_dir;
+		if (const char* env_dir = std::getenv("BTOP_WEB_DIR"); env_dir != nullptr and *env_dir != '\0') {
+			web_app_dir = env_dir;
+		}
+		else if (not Global::self_path.empty()) {
+			web_app_dir = (Global::self_path / "../share/btop/web").lexically_normal().string();
+		}
+		if (not web_app_dir.empty() and not fs::is_directory(web_app_dir)) {
+			for (const auto* candidate : {"/usr/local/share/btop/web", "/usr/share/btop/web"}) {
+				if (fs::is_directory(fs::path(candidate))) {
+					web_app_dir = candidate;
+					break;
+				}
+			}
+		}
+		const bool have_web = not web_app_dir.empty() and fs::is_directory(web_app_dir);
+
+		//? Read the SPA shell once so handlers can serve it without touching the filesystem.
+		std::string spa_index;
+		if (have_web) {
+			std::ifstream in(fs::path(web_app_dir) / "index.html", std::ios::binary);
+			if (in) {
+				std::ostringstream buffer;
+				buffer << in.rdbuf();
+				spa_index = buffer.str();
+			}
+			if (spa_index.empty()) {
+				Logger::warning("btop: web UI directory '{}' found but index.html is missing/unreadable", web_app_dir);
+			}
+		}
+		else {
+			Logger::info("btop: no web UI found ({}), serving API only", web_app_dir.empty() ? "no candidate path" : web_app_dir);
+		}
+
 		httplib::Server svr;
 		svr.set_default_headers({
 			{ "Access-Control-Allow-Origin", "*" },
@@ -194,8 +237,17 @@ namespace Http {
 			{ "Access-Control-Allow-Headers", "Content-Type" },
 		});
 
-		//? Endpoint index
-		svr.Get("/", [](const httplib::Request&, httplib::Response& res) {
+		//? Serve the SPA's static assets (/_app/...) from the bundled web UI.
+		if (have_web and fs::is_directory(fs::path(web_app_dir) / "_app")) {
+			svr.set_mount_point("/_app", (fs::path(web_app_dir) / "_app").string());
+		}
+
+		//? Endpoint index (browsers get the SPA shell, API clients get JSON)
+		svr.Get("/", [&spa_index](const httplib::Request& req, httplib::Response& res) {
+			if (not spa_index.empty() and req.get_header_value("Accept").find("text/html") != std::string::npos) {
+				res.set_content(spa_index, "text/html; charset=utf-8");
+				return;
+			}
 			json root = {
 				{ "name", "btop" },
 				{ "version", Global::Version },
@@ -231,6 +283,19 @@ namespace Http {
 			res.set_content(snap.value().first, "application/json");
 		});
 
+		//? SPA fallback: unknown GETs serve the app shell so deep links / refreshes work.
+		//? Must be registered last so the API routes above take precedence.
+		if (have_web) {
+			svr.Get(".*", [&spa_index](const httplib::Request& req, httplib::Response& res) {
+				if (req.get_header_value("Accept").find("text/html") != std::string::npos) {
+					res.set_content(spa_index, "text/html; charset=utf-8");
+					return;
+				}
+				res.status = httplib::StatusCode::NotFound_404;
+				res.set_content("{\"error\":\"not found\"}", "application/json");
+			});
+		}
+
 		const bool ephemeral = (address.port == 0);
 		if (ephemeral) {
 			const int actual_port = svr.bind_to_any_port(address.host);
@@ -246,6 +311,9 @@ namespace Http {
 				return 1;
 			}
 			fmt::println("btop: HTTP server listening on http://{}:{}", address.host, address.port);
+		}
+		if (have_web and not spa_index.empty()) {
+			fmt::println("btop: web UI served from {}", web_app_dir);
 		}
 		//? Make the listening address visible immediately, even when stdout is redirected
 		std::cout.flush();

@@ -72,6 +72,7 @@ namespace Global {
 	extern string clock;
 	extern uid_t real_uid, set_uid;
 	extern atomic<bool> init_conf;
+	extern std::filesystem::path self_path;
 }
 
 namespace Runner {
