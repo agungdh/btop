@@ -16,7 +16,7 @@
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
-[![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
+[![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-gpu.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-gpu.yml)
 
 ## Index
 
