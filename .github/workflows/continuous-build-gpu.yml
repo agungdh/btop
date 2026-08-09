@@ -37,7 +37,20 @@ concurrency:
 
 jobs:
   gpu_build_linux:
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64
+            os: ubuntu-24.04
+            march: x86-64-v2
+            gpu: true
+          - name: arm64
+            os: ubuntu-24.04-arm
+            march: armv8-a
+            gpu: false
     container: alpine:edge
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,4 +61,4 @@ jobs:
         run: apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Compile
-        run: make CXX=g++ CXXFLAGS=-march=x86-64-v2 GPU_SUPPORT=true
+        run: make CXX=g++ CXXFLAGS=-march=${{ matrix.march }} GPU_SUPPORT=${{ matrix.gpu }}

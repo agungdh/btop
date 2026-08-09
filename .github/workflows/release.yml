@@ -38,11 +38,26 @@ jobs:
           ctest --test-dir build --output-on-failure
 
   build:
-    name: x86_64 gpu
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64 gpu
+            os: ubuntu-24.04
+            arch: x86_64
+            march: x86-64-v2
+            gpu: true
+          - name: arm64
+            os: ubuntu-24.04-arm
+            arch: aarch64
+            march: armv8-a
+            gpu: false
     env:
       VERSION: ${{ github.event.release.tag_name || github.ref_name }}
       WEB_VERSION: ${{ github.event.inputs.web_version || 'v0.0.2' }}
+      PKG_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,11 +78,11 @@ jobs:
           echo "btop-web ${WEB_VERSION} extracted"
 
       - name: Compile
-        run: make CXX=g++-14 CXXFLAGS=-march=x86-64-v2 STRIP=true GPU_SUPPORT=true BUILD_TYPE=Release WEBDIR=web
+        run: make CXX=g++-14 CXXFLAGS=-march=${{ matrix.march }} STRIP=true GPU_SUPPORT=${{ matrix.gpu }} BUILD_TYPE=Release WEBDIR=web
 
       - name: Package
         run: |
-          ARCHIVE="btop-x86_64-linux-gnu-${VERSION}"
+          ARCHIVE="btop-${PKG_ARCH}-linux-gnu-${VERSION}"
           STAGE="/tmp/stage"
           mkdir -p "$STAGE/bin" "$STAGE/share/btop"
           cp bin/btop "$STAGE/bin/btop"
@@ -84,4 +99,4 @@ jobs:
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$VERSION" btop-x86_64-linux-gnu-${VERSION}.tar.gz btop-x86_64-linux-gnu-${VERSION}.tar.gz.sha256 --clobber
+        run: gh release upload "$VERSION" btop-${PKG_ARCH}-linux-gnu-${VERSION}.tar.gz btop-${PKG_ARCH}-linux-gnu-${VERSION}.tar.gz.sha256 --clobber
