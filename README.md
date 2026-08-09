@@ -368,7 +368,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Installation
 
-**Binaries for this fork's releases are x86_64 and arm64 (aarch64, ARMv8 baseline) Linux, dynamically linked against glibc. x86_64 builds ship with GPU support enabled.**
+**Binaries for this fork's releases are x86_64 and arm64 (aarch64, ARMv8 baseline) Linux, dynamically linked against glibc and statically linked against libstdc++ (built on Ubuntu 22.04/glibc 2.35 for broad compatibility, runs on glibc ≥ 2.32). x86_64 builds ship with GPU support enabled.**
 
 1. **Download btop-x86_64-linux-gnu-(VERSION).tar.gz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
