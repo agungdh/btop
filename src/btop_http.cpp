@@ -262,6 +262,9 @@ namespace Http {
 		if (auth.has_value()) {
 			const auto expected = "Basic " + httplib::detail::base64_encode(auth->username + ":" + auth->password);
 			svr.set_pre_routing_handler([expected](const httplib::Request& req, httplib::Response& res) {
+				if (req.method == "OPTIONS") {
+					return httplib::Server::HandlerResponse::Unhandled;
+				}
 				if (req.get_header_value("Authorization") != expected) {
 					res.status = httplib::StatusCode::Unauthorized_401;
 					res.set_header("WWW-Authenticate", "Basic realm=\"btop\"");
