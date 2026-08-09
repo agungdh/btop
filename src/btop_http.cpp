@@ -252,6 +252,11 @@ namespace Http {
 			{ "Access-Control-Allow-Headers", "Content-Type, Authorization" },
 		});
 
+		//? CORS preflight: answer OPTIONS for any path so cross-origin browser calls work.
+		svr.Options(".*", [](const httplib::Request&, httplib::Response& res) {
+			res.status = httplib::StatusCode::NoContent_204;
+		});
+
 		//? HTTP basic auth: reject any request without the matching Authorization header before
 		//? it reaches a route handler.
 		if (auth.has_value()) {
