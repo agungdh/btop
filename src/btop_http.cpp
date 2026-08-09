@@ -180,11 +180,20 @@ namespace Http {
 		return true;
 	}
 
+	auto parse_basic_auth(const std::string_view value, BasicAuth& out) noexcept -> bool {
+		out = BasicAuth {};
+		const auto colon = value.find(':');
+		if (colon == std::string_view::npos or colon == 0 or colon + 1 == value.size()) return false;
+		out.username = string { value.substr(0, colon) };
+		out.password = string { value.substr(colon + 1) };
+		return true;
+	}
+
 	bool daemonize(const std::optional<std::filesystem::path>& pidfile) {
 		return Json::daemonize_process(pidfile);
 	}
 
-	int run(const Json::Options& options, const Address& address, std::uint32_t update_ms) {
+	int run(const Json::Options& options, const Address& address, std::uint32_t update_ms, const std::optional<BasicAuth>& auth) {
 		//? Graceful shutdown on SIGINT/SIGTERM
 		std::signal(SIGINT, signal_handler);
 		std::signal(SIGTERM, signal_handler);
@@ -240,8 +249,23 @@ namespace Http {
 		svr.set_default_headers({
 			{ "Access-Control-Allow-Origin", "*" },
 			{ "Access-Control-Allow-Methods", "GET, OPTIONS" },
-			{ "Access-Control-Allow-Headers", "Content-Type" },
+			{ "Access-Control-Allow-Headers", "Content-Type, Authorization" },
 		});
+
+		//? HTTP basic auth: reject any request without the matching Authorization header before
+		//? it reaches a route handler.
+		if (auth.has_value()) {
+			const auto expected = "Basic " + httplib::detail::base64_encode(auth->username + ":" + auth->password);
+			svr.set_pre_routing_handler([expected](const httplib::Request& req, httplib::Response& res) {
+				if (req.get_header_value("Authorization") != expected) {
+					res.status = httplib::StatusCode::Unauthorized_401;
+					res.set_header("WWW-Authenticate", "Basic realm=\"btop\"");
+					res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+					return httplib::Server::HandlerResponse::Handled;
+				}
+				return httplib::Server::HandlerResponse::Unhandled;
+			});
+		}
 
 		//? Serve the SPA's static assets (/_app/...) from the web UI directory.
 		if (have_web and fs::is_directory(fs::path(web_app_dir) / "_app")) {

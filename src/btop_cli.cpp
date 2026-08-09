@@ -217,6 +217,22 @@ namespace Cli {
 				cli.http = std::make_optional(std::string { value });
 				continue;
 			}
+			if (arg == "--http-auth") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("HTTP auth requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				const auto colon = arg.find(':');
+				if (colon == std::string_view::npos or colon == 0 or colon + 1 == arg.size()) {
+					error("HTTP auth must be in the form 'user:password'");
+					return std::unexpected { 1 };
+				}
+				cli.http_auth = std::make_optional(std::string { arg });
+				continue;
+			}
 			if (arg == "-o" || arg == "--output") {
 				// This flag requires an argument.
 				if (++it == args.end()) {
@@ -333,6 +349,12 @@ namespace Cli {
 			return std::unexpected { 1 };
 		}
 
+		//? --http-auth is only meaningful with --http
+		if (cli.http_auth.has_value() and not cli.http.has_value()) {
+			error("Option --http-auth can only be used together with --http");
+			return std::unexpected { 1 };
+		}
+
 		//? --output and --iterations are only meaningful with --json
 		if (not cli.json_output and (cli.output_file.has_value() or cli.iterations.has_value())) {
 			error("Options --output and --iterations can only be used together with --json");
@@ -427,7 +449,9 @@ namespace Cli {
 			"  {2}    --pid{1} <pid>         Include detailed information for process <pid>\n"
 			"{0}HTTP server options:{1}\n"
 			"  {2}    --http{1} [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json).\n"
-			"                                    Does not require a TTY. Default address 127.0.0.1:8080\n",
+			"                                    Does not require a TTY. Default address 127.0.0.1:8080\n"
+			"  {2}    --http-auth{1} <user:pass>\n"
+			"                                    Require HTTP basic auth credentials for all endpoints.\n",
 			BOLD_UNDERLINE, RESET, BOLD
 		);
 	}

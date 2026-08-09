@@ -1603,6 +1603,8 @@ JSON output options (--json, shared flags also work with --http):
 HTTP server options (only valid with --http):
       --http [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json).
                               Does not require a TTY. Default address 127.0.0.1:8080
+      --http-auth <user:pass>
+                          Require HTTP basic auth credentials for all endpoints
 ```
 
 #### JSON output mode
@@ -1664,7 +1666,16 @@ btop --http 0.0.0.0:8080 -u 500
 
 # Run as a daemon
 btop --http 127.0.0.1:8080 --daemon --pidfile /run/btop.pid
+
+# Require basic auth credentials on every request
+btop --http 0.0.0.0:8080 --http-auth admin:secret
+curl -s -u admin:secret http://127.0.0.1:8080/api/json
 ```
+
+With `--http-auth user:password` every endpoint (including `/healthz` and the web UI) requires
+HTTP basic auth. Unauthenticated requests get `401 Unauthorized` with a `WWW-Authenticate` header.
+Pass the credentials with `curl -u user:password`. Note that basic auth is sent in cleartext, so
+combine it with `--http 127.0.0.1:8080` or an authenticated reverse proxy/TLS.
 
 Binding to anything other than `127.0.0.1` exposes the metrics unauthenticated; keep the server on
 localhost or behind an authenticated reverse proxy.

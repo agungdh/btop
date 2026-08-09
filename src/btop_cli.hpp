@@ -36,6 +36,8 @@ namespace Cli {
 		bool json_output {};
 		// Headless HTTP server mode, "[addr:]port" to listen on (default "127.0.0.1:8080")
 		std::optional<std::string> http;
+		// HTTP basic auth credentials, "user:password" (only with --http)
+		std::optional<std::string> http_auth;
 		// Path to write JSON output to instead of stdout ('-' for stdout)
 		std::optional<stdfs::path> output_file;
 		// Number of JSON snapshots to write (0 = run forever)

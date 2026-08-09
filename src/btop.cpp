@@ -994,11 +994,20 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 				return 1;
 			}
 
+			std::optional<Http::BasicAuth> http_auth;
+			if (cli.http_auth.has_value()) {
+				http_auth.emplace();
+				if (not Http::parse_basic_auth(cli.http_auth.value(), http_auth.value())) {
+					fmt::println(std::cerr, "error: invalid --http-auth value (expected user:password)");
+					return 1;
+				}
+			}
+
 			//? Daemonize before any collection so forked processes don't inherit thread/async state
 			if (cli.daemon and not Http::daemonize(cli.pidfile)) return 1;
 
 			if (not init_shared()) return 1;
-			return Http::run(json_opts, address, update_ms);
+			return Http::run(json_opts, address, update_ms, http_auth);
 		}
 
 		//? Daemonize before any collection so forked processes don't inherit thread/async state

@@ -301,6 +301,57 @@ TEST(http, cli_parse_http_conflicts) {
 	}
 }
 
+TEST(http, parse_basic_auth) {
+	Http::BasicAuth auth;
+
+	EXPECT_TRUE(Http::parse_basic_auth("admin:secret", auth));
+	EXPECT_EQ(auth.username, "admin");
+	EXPECT_EQ(auth.password, "secret");
+
+	EXPECT_TRUE(Http::parse_basic_auth("user:p@ss:w0rd", auth));
+	EXPECT_EQ(auth.username, "user");
+	EXPECT_EQ(auth.password, "p@ss:w0rd");
+
+	EXPECT_FALSE(Http::parse_basic_auth("", auth));
+	EXPECT_FALSE(Http::parse_basic_auth("nocolon", auth));
+	EXPECT_FALSE(Http::parse_basic_auth(":pass", auth));
+	EXPECT_FALSE(Http::parse_basic_auth("user:", auth));
+	EXPECT_FALSE(Http::parse_basic_auth(":", auth));
+}
+
+TEST(http, cli_parse_http_auth) {
+	{
+		const std::vector<std::string_view> args { "--http", "0.0.0.0:9000", "--http-auth", "admin:secret" };
+		auto result = Cli::parse(args);
+		ASSERT_TRUE(result.has_value());
+		const auto& cli = result.value();
+		ASSERT_TRUE(cli.http.has_value());
+		ASSERT_TRUE(cli.http_auth.has_value());
+		EXPECT_EQ(cli.http_auth.value(), "admin:secret");
+	}
+	//? --http-auth without --http is rejected
+	{
+		const std::vector<std::string_view> args { "--http-auth", "admin:secret" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+	//? malformed credentials are rejected
+	{
+		const std::vector<std::string_view> args { "--http", "--http-auth", "nopass" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+	//? --http-auth requires an argument
+	{
+		const std::vector<std::string_view> args { "--http", "--http-auth" };
+		auto result = Cli::parse(args);
+		EXPECT_FALSE(result.has_value());
+		EXPECT_NE(result.error(), 0);
+	}
+}
+
 TEST(http, cli_parse_http_daemon_without_output) {
 	//? http daemon mode must not require --output
 	const std::vector<std::string_view> args { "--http", "--daemon" };
