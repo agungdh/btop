@@ -97,7 +97,7 @@ namespace Global {
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
 	// Fork version; upstream base is btop v1.4.7
-	const string Version = "0.3.6";
+	const string Version = "0.3.7";
 
 	int coreCount;
 	string overlay;
