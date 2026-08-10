@@ -76,9 +76,11 @@ OLDLD := $(LDFLAGS)
 
 PREFIX ?= /usr/local
 
-#? Web UI (btop-web static build). `make web` copies it next to the binary so the HTTP
-#? server can serve it. Override with WEBDIR=path.
-WEBDIR ?= /home/agungdh/WebstormProjects/btop-web/build
+#? Web UI (btop-web static build). `make web` downloads the release build and
+#? places it next to the binary so the HTTP server can serve it.
+#? Override WEB_RELEASE=tag to pin a different btop-web version.
+WEB_RELEASE ?= v0.0.4
+WEB_URL ?= https://github.com/agungdh/btop-web/releases/download/$(WEB_RELEASE)/btop-web-$(WEB_RELEASE).tar.gz
 
 #? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
@@ -318,7 +320,7 @@ help:
 	@printf "usage: make [argument]\n\n"
 	@printf "arguments:\n"
 	@printf "  all          Compile btop (default argument)\n"
-	@printf "  web          Copy btop-web static build to bin/web (from \$$WEBDIR)\n"
+	@printf "  web          Download btop-web release build to bin/web (from \$$WEB_URL)\n"
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
@@ -341,15 +343,14 @@ $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
 	@$(VERBOSE) || printf 'sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null\n'
 	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
 
-#? Copy the btop-web static build to $(TARGETDIR)/web so the HTTP server can serve it
-#? next to the binary. Skipped silently when no web build exists.
+#? Download the btop-web release build to $(TARGETDIR)/web so the HTTP server can
+#? serve it next to the binary.
 web: | directories
-	@if [ -d "$(WEBDIR)" ]; then \
-		rm -rf $(TARGETDIR)/web && cp -pr "$(WEBDIR)" "$(TARGETDIR)/web"; \
-		$(call green,Copied web UI to: ,$(WHITE)$(TARGETDIR)/web); \
-	else \
-		$(QUIET) || $(call yellow,No web UI build at '$(WEBDIR)': skipping,,\n); \
-	fi
+	@mkdir -p $(BUILDDIR)
+	@curl -fsSL "$(WEB_URL)" -o $(BUILDDIR)/web.tar.gz && \
+		rm -rf $(TARGETDIR)/web && mkdir -p $(TARGETDIR)/web && \
+		tar -xzf $(BUILDDIR)/web.tar.gz -C $(TARGETDIR)/web && \
+		$(call green,Downloaded web UI $(WEB_RELEASE) to: ,$(WHITE)$(TARGETDIR)/web)
 
 #? Man page
 btop.1: manpage.md | directories
