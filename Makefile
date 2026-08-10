@@ -344,13 +344,27 @@ $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
 	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
 
 #? Download the btop-web release build to $(TARGETDIR)/web so the HTTP server can
-#? serve it next to the binary.
+#? serve it next to the binary. Uses curl, wget or python3 and skips with a
+#? warning when none is available, so a missing web UI never breaks the build.
 web: | directories
 	@mkdir -p $(BUILDDIR)
-	@curl -fsSL "$(WEB_URL)" -o $(BUILDDIR)/web.tar.gz && \
+	@rm -f $(BUILDDIR)/web.tar.gz
+	@if command -v curl >/dev/null 2>&1; then \
+		curl -fsSL "$(WEB_URL)" -o $(BUILDDIR)/web.tar.gz; \
+	elif command -v wget >/dev/null 2>&1; then \
+		wget -q "$(WEB_URL)" -O $(BUILDDIR)/web.tar.gz; \
+	elif command -v python3 >/dev/null 2>&1; then \
+		python3 -c "import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$(WEB_URL)" "$(BUILDDIR)/web.tar.gz"; \
+	else \
+		echo "no web downloader available"; \
+	fi || true
+	@if [ -s "$(BUILDDIR)/web.tar.gz" ]; then \
 		rm -rf $(TARGETDIR)/web && mkdir -p $(TARGETDIR)/web && \
 		tar -xzf $(BUILDDIR)/web.tar.gz -C $(TARGETDIR)/web && \
-		$(call green,Downloaded web UI $(WEB_RELEASE) to: ,$(WHITE)$(TARGETDIR)/web)
+		$(call green,Downloaded web UI $(WEB_RELEASE) to: ,$(WHITE)$(TARGETDIR)/web); \
+	else \
+		$(QUIET) || $(call yellow,No web UI downloaded (no downloader or network): skipping,,\n); \
+	fi
 
 #? Man page
 btop.1: manpage.md | directories
