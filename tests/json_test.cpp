@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <filesystem>
+#include <fstream>
 #include <string_view>
 #include <vector>
 
@@ -7,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "btop_cli.hpp"
+#include "btop_config.hpp"
 #include "btop_http.hpp"
 #include "btop_json.hpp"
 
@@ -121,10 +124,6 @@ TEST(json, cli_parse_json_flags_require_json) {
 	for (const auto& args : std::vector<std::vector<std::string_view>> {
 		{ "-o", "/tmp/out.json" },
 		{ "-n", "5" },
-		{ "--sections", "cpu" },
-		{ "--top-procs", "10" },
-		{ "--pid", "1" },
-		{ "--daemon" },
 	}) {
 		auto result = Cli::parse(args);
 		EXPECT_FALSE(result.has_value()) << "expected error for flags without --json";
@@ -232,73 +231,52 @@ TEST(http, parse_address_invalid) {
 	EXPECT_FALSE(Http::parse_address("127.0.0.1: 8080", addr));
 }
 
-TEST(http, cli_parse_http_flags) {
-	const std::vector<std::string_view> args {
-		"--http", "0.0.0.0:9000", "-u", "500", "--sections", "cpu,mem",
-		"--top-procs", "10", "--pid", "42", "--daemon", "--pidfile", "/tmp/btop.pid",
-	};
-	auto result = Cli::parse(args);
-	ASSERT_TRUE(result.has_value());
-	const auto& cli = result.value();
-	ASSERT_TRUE(cli.http.has_value());
-	EXPECT_EQ(cli.http.value(), "0.0.0.0:9000");
-	EXPECT_TRUE(cli.daemon);
-	ASSERT_TRUE(cli.updates.has_value());
-	EXPECT_EQ(cli.updates.value(), 500);
-	ASSERT_TRUE(cli.sections.has_value());
-	EXPECT_EQ(cli.sections.value(), "cpu,mem");
-	ASSERT_TRUE(cli.top_procs.has_value());
-	EXPECT_EQ(cli.top_procs.value(), 10);
-	ASSERT_TRUE(cli.pid.has_value());
-	EXPECT_EQ(cli.pid.value(), 42);
+TEST(http, config_load_http_settings) {
+	const auto dir = std::filesystem::temp_directory_path() / "btop_cfg_http";
+	std::filesystem::create_directories(dir);
+	const auto file = dir / "btop.conf";
+	{
+		std::ofstream out(file);
+		out << "#? Config file for btop\n"
+			<< "http = \"127.0.0.1:9000\"\n"
+			<< "http_auth = \"admin:secret\"\n";
+	}
+	std::vector<std::string> warnings;
+	Config::load(file, warnings);
+	EXPECT_TRUE(warnings.empty());
+	EXPECT_EQ(Config::getS("http"), "127.0.0.1:9000");
+	EXPECT_EQ(Config::getS("http_auth"), "admin:secret");
+	Config::set("http", std::string {});
+	Config::set("http_auth", std::string {});
+	std::filesystem::remove_all(dir);
 }
 
-TEST(http, cli_parse_http_default_value) {
-	{
-		const std::vector<std::string_view> args { "--http" };
-		auto result = Cli::parse(args);
-		ASSERT_TRUE(result.has_value());
-		ASSERT_TRUE(result.value().http.has_value());
-		EXPECT_EQ(result.value().http.value(), "127.0.0.1:8080");
-	}
-	{
-		const std::vector<std::string_view> args { "--http", ":8082" };
-		auto result = Cli::parse(args);
-		ASSERT_TRUE(result.has_value());
-		ASSERT_TRUE(result.value().http.has_value());
-		EXPECT_EQ(result.value().http.value(), ":8082");
-	}
-	{
-		const std::vector<std::string_view> args { "--http", "9000" };
-		auto result = Cli::parse(args);
-		ASSERT_TRUE(result.has_value());
-		ASSERT_TRUE(result.value().http.has_value());
-		EXPECT_EQ(result.value().http.value(), "9000");
-	}
+TEST(http, config_default_http_disabled) {
+	//? http/http_auth default to empty strings, i.e. HTTP server mode is off
+	Config::set("http", std::string {});
+	Config::set("http_auth", std::string {});
+	EXPECT_EQ(Config::getS("http"), "");
+	EXPECT_EQ(Config::getS("http_auth"), "");
 }
 
-TEST(http, cli_parse_http_conflicts) {
-	//? --http and --json are mutually exclusive
+TEST(http, config_load_http_quotes_auth_with_colons) {
+	const auto dir = std::filesystem::temp_directory_path() / "btop_cfg_http_colon";
+	std::filesystem::create_directories(dir);
+	const auto file = dir / "btop.conf";
 	{
-		const std::vector<std::string_view> args { "--http", "--json" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
+		std::ofstream out(file);
+		out << "#? Config file for btop\n"
+			<< "http = :8082\n"
+			<< "http_auth = user:p@ss:w0rd\n";
 	}
-	//? --output is json-only
-	{
-		const std::vector<std::string_view> args { "--http", "-o", "/tmp/out.json" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
-	}
-	//? --iterations is json-only
-	{
-		const std::vector<std::string_view> args { "--http", "-n", "5" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
-	}
+	std::vector<std::string> warnings;
+	Config::load(file, warnings);
+	EXPECT_TRUE(warnings.empty());
+	EXPECT_EQ(Config::getS("http"), ":8082");
+	EXPECT_EQ(Config::getS("http_auth"), "user:p@ss:w0rd");
+	Config::set("http", std::string {});
+	Config::set("http_auth", std::string {});
+	std::filesystem::remove_all(dir);
 }
 
 TEST(http, parse_basic_auth) {
@@ -317,45 +295,4 @@ TEST(http, parse_basic_auth) {
 	EXPECT_FALSE(Http::parse_basic_auth(":pass", auth));
 	EXPECT_FALSE(Http::parse_basic_auth("user:", auth));
 	EXPECT_FALSE(Http::parse_basic_auth(":", auth));
-}
-
-TEST(http, cli_parse_http_auth) {
-	{
-		const std::vector<std::string_view> args { "--http", "0.0.0.0:9000", "--http-auth", "admin:secret" };
-		auto result = Cli::parse(args);
-		ASSERT_TRUE(result.has_value());
-		const auto& cli = result.value();
-		ASSERT_TRUE(cli.http.has_value());
-		ASSERT_TRUE(cli.http_auth.has_value());
-		EXPECT_EQ(cli.http_auth.value(), "admin:secret");
-	}
-	//? --http-auth without --http is rejected
-	{
-		const std::vector<std::string_view> args { "--http-auth", "admin:secret" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
-	}
-	//? malformed credentials are rejected
-	{
-		const std::vector<std::string_view> args { "--http", "--http-auth", "nopass" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
-	}
-	//? --http-auth requires an argument
-	{
-		const std::vector<std::string_view> args { "--http", "--http-auth" };
-		auto result = Cli::parse(args);
-		EXPECT_FALSE(result.has_value());
-		EXPECT_NE(result.error(), 0);
-	}
-}
-
-TEST(http, cli_parse_http_daemon_without_output) {
-	//? http daemon mode must not require --output
-	const std::vector<std::string_view> args { "--http", "--daemon" };
-	auto result = Cli::parse(args);
-	ASSERT_TRUE(result.has_value());
-	EXPECT_TRUE(result.value().daemon);
 }

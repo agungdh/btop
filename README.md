@@ -233,7 +233,7 @@ This fork (v0.2.0) is based on upstream [btop](https://github.com/aristocratos/b
 * Selectable symbols for the graphs.
 * Custom presets
 * Headless JSON output mode with daemon support (`btop --json`)
-* Headless HTTP server mode (`btop --http`)
+* Headless HTTP server mode (enabled with `http` in the config file)
 * And more...
 
 ## Themes
@@ -1590,7 +1590,7 @@ Options:
   -h, --help              Show this help message and exit
   -V, --version           Show a version message and exit (more with --version)
 
-JSON output options (--json, shared flags also work with --http):
+JSON output options (--json, shared flags also work with HTTP server mode):
       --json              Headless mode, output system stats as JSON. Does not require a TTY
   -o, --output <file>     Write JSON output to <file> instead of stdout ('-' for stdout)
   -n, --iterations <n>    Number of snapshots to write before exiting (0 = run forever, default 1)
@@ -1600,11 +1600,10 @@ JSON output options (--json, shared flags also work with --http):
       --top-procs <n>     Only output the top <n> processes sorted by cpu usage
       --pid <pid>         Include detailed information for process <pid>
 
-HTTP server options (only valid with --http):
-      --http [addr:port]  Headless HTTP server mode, serves stats as JSON (GET /api/json).
-                              Does not require a TTY. Default address 127.0.0.1:8080
-      --http-auth <user:pass>
-                          Require HTTP basic auth credentials for all endpoints
+HTTP server mode (enabled via config file keys, e.g. ~/.config/btop/btop.conf):
+      http=[addr:port]     Headless HTTP server mode, serves stats as JSON (GET /api/json).
+                              Does not require a TTY. Empty string disables the server
+      http_auth=user:pass  Require HTTP basic auth credentials for all endpoints
 ```
 
 #### JSON output mode
@@ -1636,11 +1635,12 @@ with `SIGTERM` or `SIGINT` for a clean shutdown.
 
 #### HTTP server mode
 
-`btop --http [addr:port]` runs the same headless collectors and exposes them over HTTP so a
+HTTP server mode is enabled by setting the `http` key in the btop config file (e.g.
+`~/.config/btop/btop.conf`). It runs the same headless collectors and exposes them over HTTP so a
 frontend can consume the data live without spawning a new process per request. The server binds to
-`127.0.0.1:8080` by default; pass an address and/or port to change it (for example `--http
-0.0.0.0:9000` or `--http :9000`). Port `0` picks a free ephemeral port and prints the chosen one
-to stdout.
+`127.0.0.1:8080` by default; set `http` to an address and/or port to change it (for example
+`http = "0.0.0.0:9000"` or `http = ":9000"`). Port `0` picks a free ephemeral port and prints the
+chosen one to stdout. An empty string (the default) disables the server.
 
 Endpoints:
 
@@ -1655,27 +1655,34 @@ every update interval (`-u`, default 2000 ms) and caches it; `GET /api/json` ret
 snapshot (the first request waits one update interval so usage deltas are valid, like `--json`).
 The `--sections`, `--top-procs`, `--pid`, `--daemon` and `--pidfile` options work here too.
 
+Example config (`~/.config/btop/btop.conf`):
+
+```conf
+# Bind to all interfaces and refresh every 500 ms
+http = "0.0.0.0:8080"
+
+# Require basic auth credentials on every request
+http_auth = "admin:secret"
+```
+
 Examples:
 
 ```bash
 # One-shot snapshot over HTTP
 curl -s http://127.0.0.1:8080/api/json
 
-# Bind to all interfaces and refresh every 500 ms
-btop --http 0.0.0.0:8080 -u 500
-
 # Run as a daemon
-btop --http 127.0.0.1:8080 --daemon --pidfile /run/btop.pid
+btop --daemon --pidfile /run/btop.pid
 
 # Require basic auth credentials on every request
-btop --http 0.0.0.0:8080 --http-auth admin:secret
 curl -s -u admin:secret http://127.0.0.1:8080/api/json
 ```
 
-With `--http-auth user:password` every endpoint (including `/healthz` and the web UI) requires
-HTTP basic auth. Unauthenticated requests get `401 Unauthorized` with a `WWW-Authenticate` header.
-Pass the credentials with `curl -u user:password`. Note that basic auth is sent in cleartext, so
-combine it with `--http 127.0.0.1:8080` or an authenticated reverse proxy/TLS.
+With `http_auth = "user:password"` in the config file every endpoint (including `/healthz` and the
+web UI) requires HTTP basic auth. Unauthenticated requests get `401 Unauthorized` with a
+`WWW-Authenticate` header. Pass the credentials with `curl -u user:password`. Note that basic auth
+is sent in cleartext, so bind to `127.0.0.1` or put the server behind an authenticated reverse
+proxy/TLS.
 
 Binding to anything other than `127.0.0.1` exposes the metrics unauthenticated; keep the server on
 localhost or behind an authenticated reverse proxy.

@@ -26,12 +26,12 @@ namespace Http {
 		std::string password;
 	};
 
-	//* Parse an "[addr:]port" CLI value. Accepts "host:port", ":port" and "port" forms.
+	//* Parse an "[addr:]port" value. Accepts "host:port", ":port" and "port" forms.
 	//* An empty host (":port" / "port") defaults to 127.0.0.1. Port 0 selects an ephemeral port.
 	//* Returns false on malformed input.
 	[[nodiscard]] auto parse_address(const std::string_view value, Address& out) noexcept -> bool;
 
-	//* Parse a "user:password" CLI value into <out>. Returns false when either part is empty or
+	//* Parse a "user:password" value into <out>. Returns false when either part is empty or
 	//* the colon separator is missing.
 	[[nodiscard]] auto parse_basic_auth(const std::string_view value, BasicAuth& out) noexcept -> bool;
 

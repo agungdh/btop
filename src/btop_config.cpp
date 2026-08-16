@@ -253,6 +253,12 @@ namespace Config {
 		{"log_level", 			"#* Set loglevel for \"~/.local/state/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 		{"save_config_on_exit",  "#* Automatically save current settings to config file on exit."},
+
+		{"http", 				"#* Listen address for the headless HTTP server mode, e.g. \"127.0.0.1:8080\".\n"
+								"#* The value may be \"host:port\", \":port\" or just \"port\"; an empty string disables the HTTP server.\n"
+								"#* An empty host defaults to 127.0.0.1, port 0 picks a free ephemeral port. Requires no TTY."},
+		{"http_auth", 			"#* Require HTTP basic auth credentials on all HTTP server endpoints, in the form \"user:password\".\n"
+								"#* Only used together with http. Note that basic auth is sent in cleartext over the wire."},
 	#ifdef GPU_SUPPORT
 
 		{"nvml_measure_pcie_speeds",
@@ -301,6 +307,8 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+		{"http", ""},
+		{"http_auth", ""},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
 		{"custom_gpu_name1", ""},

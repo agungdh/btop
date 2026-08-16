@@ -937,8 +937,32 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	//? Config init
 	init_config(cli.low_color, cli.filter);
 
+	//? HTTP server settings come from the config file (keys "http" and "http_auth")
+	const string& http_addr = Config::getS("http");
+	const string& http_auth_str = Config::getS("http_auth");
+	const bool http_mode = not http_addr.empty();
+
+	//? Validate that headless-only flags are used together with --json or HTTP server mode (from config)
+	if (not cli.json_output and not http_mode and (cli.daemon or cli.pidfile.has_value() or cli.sections.has_value()
+		or cli.top_procs.has_value() or cli.pid.has_value())) {
+		fmt::println(std::cerr, "{}error:{} Options --daemon, --pidfile, --sections, --top-procs and --pid can only be used together with --json or HTTP server mode (http in the config file)\n", Global::fg_red, Global::fg_white);
+		return 1;
+	}
+
+	//? --json and HTTP server mode are mutually exclusive
+	if (cli.json_output and http_mode) {
+		fmt::println(std::cerr, "{}error:{} Options --json and HTTP server mode (http in the config file) are mutually exclusive\n", Global::fg_red, Global::fg_white);
+		return 1;
+	}
+
+	//? http_auth is only meaningful with http
+	if (not http_auth_str.empty() and not http_mode) {
+		fmt::println(std::cerr, "{}error:{} Option http_auth can only be used together with http in the config file\n", Global::fg_red, Global::fg_white);
+		return 1;
+	}
+
 	//? ----------------------------------------------- HEADLESS MODES (JSON / HTTP) --------------------------------------
-	if (cli.json_output or cli.http.has_value()) {
+	if (cli.json_output or http_mode) {
 		//? Set fixed "terminal" dimensions so collectors keep a bounded history and produce deltas
 		Term::width = 100;
 		Term::height = 30;
@@ -987,18 +1011,18 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		};
 
 		//? HTTP server mode
-		if (cli.http.has_value()) {
+		if (http_mode) {
 			Http::Address address;
-			if (not Http::parse_address(cli.http.value(), address)) {
-				fmt::println(std::cerr, "error: invalid --http address '{}' (expected [addr:]port)", cli.http.value());
+			if (not Http::parse_address(http_addr, address)) {
+				fmt::println(std::cerr, "error: invalid http address '{}' (expected [addr:]port)", http_addr);
 				return 1;
 			}
 
 			std::optional<Http::BasicAuth> http_auth;
-			if (cli.http_auth.has_value()) {
+			if (not http_auth_str.empty()) {
 				http_auth.emplace();
-				if (not Http::parse_basic_auth(cli.http_auth.value(), http_auth.value())) {
-					fmt::println(std::cerr, "error: invalid --http-auth value (expected user:password)");
+				if (not Http::parse_basic_auth(http_auth_str, http_auth.value())) {
+					fmt::println(std::cerr, "error: invalid http_auth value (expected user:password)");
 					return 1;
 				}
 			}

@@ -27,9 +27,13 @@ fail() {
 
 # Isolate config so the test doesn't touch the user's real btop config
 export XDG_CONFIG_HOME="$CFG_DIR"
-mkdir -p "$CFG_DIR"
+mkdir -p "$CFG_DIR/btop"
+# Enable HTTP server mode via the config file in the config dir (127.0.0.1:0 = ephemeral port)
+cat > "$CFG_DIR/btop/btop.conf" <<'EOF'
+http = "127.0.0.1:0"
+EOF
 
-"$BTOP" --http 127.0.0.1:0 -u 200 --sections cpu,mem >"$LOG" 2>&1 &
+"$BTOP" -u 200 --sections cpu,mem >"$LOG" 2>&1 &
 PID=$!
 
 # Wait for the "listening on" line
@@ -64,11 +68,17 @@ JSON="$(curl -fsS "$BASE/api/json")" || fail "GET /api/json failed"
 echo "$JSON" | grep -q '"meta"' || fail "/api/json missing meta"
 echo "$JSON" | grep -q '"cpu"' || fail "/api/json missing cpu"
 echo "$JSON" | grep -q '"mem"' || fail "/api/json missing mem"
-echo "$JSON" | grep -q '"proc"' && fail "/api/json should not include proc"
+echo "$JSON" | grep -qE '"proc"[[:space:]]*:' && fail "/api/json should not include proc"
 
-# /api/stream must be gone (removed): expect a 404
+# /api/stream must be gone (removed): it must not serve the JSON snapshot API anymore.
+# With a web UI present unknown routes fall back to the SPA shell (200 HTML); without
+# one they get a 404 JSON error.
 CODE="$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/stream")"
-[ "$CODE" = "404" ] || fail "GET /api/stream expected 404, got $CODE"
+if [ "$CODE" = "200" ]; then
+	curl -s "$BASE/api/stream" | grep -qi '<!doctype html>' || fail "/api/stream should serve the SPA shell, not JSON"
+elif [ "$CODE" != "404" ]; then
+	fail "/api/stream unexpected status $CODE"
+fi
 
 # Graceful shutdown on SIGTERM
 kill -TERM "$PID" 2>/dev/null || fail "could not send SIGTERM"

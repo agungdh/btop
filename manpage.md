@@ -94,18 +94,23 @@ per line). Daemon mode rewrites the output file with the latest snapshot on ever
 **\-\-pid _pid_**
 :   Include detailed information for the process with the given pid.
 
-# HTTP SERVER OPTIONS
+# HTTP SERVER MODE
 
-The following options start **btop** as a headless HTTP server that does not require a terminal.
-The same collectors as the TUI and the JSON mode run in a background thread, collecting a snapshot
+HTTP server mode runs **btop** as a headless HTTP server that does not require a terminal. It is
+enabled by setting **http** in the btop config file (for example `~/.config/btop/btop.conf`). The
+same collectors as the TUI and the JSON mode run in a background thread, collecting a snapshot
 every update interval (default 2000 ms, see **-u**). The latest snapshot is served at
-`GET /api/json` (one-shot). All responses include `Access-Control-Allow-Origin: *`. Kill the server
-with **SIGTERM** or **SIGINT** for a clean shutdown.
+`GET /api/json` (one-shot). All responses include `Access-Control-Allow-Origin: *`. Kill the
+server with **SIGTERM** or **SIGINT** for a clean shutdown.
 
-**\-\-http [_addr_:port]**
+**http=_addr_:port**
 :   Start the HTTP server, defaulting to `127.0.0.1:8080`. The value may be `host:port`, `:port`
     or just `port`; a missing host defaults to `127.0.0.1`. Port `0` picks a free ephemeral port
-    and prints the chosen address to standard output.
+    and prints the chosen address to standard output. An empty string (the default) disables the
+    HTTP server.
+
+**http_auth=_user_:password**
+:   Require HTTP basic auth credentials for every endpoint. Only used together with **http**.
 
 **\-\-sections _list_**
 :   Comma separated list of sections to collect and serve: cpu, mem, net, proc, gpu. Default is
