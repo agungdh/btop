@@ -24,6 +24,7 @@
 #include <iostream>
 
 #include "btop_log.hpp"
+#include "btop_monitor.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
@@ -137,6 +138,8 @@ namespace {
 						last_error_.clear();
 					}
 					cv_.notify_all();
+					//? Threshold monitoring runs off the freshly collected snapshot
+					Monitor::evaluate();
 				}
 				catch (const std::exception& e) {
 					Logger::error("Sampler: snapshot failed: {}", e.what());
@@ -199,6 +202,8 @@ namespace Http {
 		std::signal(SIGTERM, signal_handler);
 
 		Sampler sampler { options, update_ms };
+		//? Open the threshold-monitor database before the sampler starts evaluating snapshots
+		Monitor::init();
 		sampler.start();
 
 		//? Locate the web UI (btop-web static build) to serve the SPA alongside the API.
@@ -365,6 +370,9 @@ namespace Http {
 		sampler.shutdown();
 		svr.stop();
 		listen_thread.join();
+
+		//? Sampler thread is joined, safe to close the database
+		Monitor::shutdown();
 
 		return 0;
 	}

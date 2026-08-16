@@ -132,6 +132,10 @@ namespace Config {
 
 	auto get_log_file() -> std::optional<std::filesystem::path>;
 
+	//* Return the XDG state directory (created if needed) where runtime state such
+	//* as the log file and the monitor database live.
+	auto get_state_dir() -> std::optional<std::filesystem::path>;
+
 	// Write default config to an in-memory buffer
 	[[nodiscard]] auto current_config() -> std::string;
 }

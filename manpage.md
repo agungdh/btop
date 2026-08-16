@@ -112,6 +112,34 @@ server with **SIGTERM** or **SIGINT** for a clean shutdown.
 **http_auth=_user_:password**
 :   Require HTTP basic auth credentials for every endpoint. Only used together with **http**.
 
+**monitor_enabled=_true|false_**
+:   Enable threshold monitoring (default _false_). When enabled, **btop** records events to a SQLite
+    database whenever a monitored metric exceeds its configured threshold and records a matching
+    "resolved" event once the metric drops back below. The database runs in WAL mode with
+    `synchronous=NORMAL`. Only used together with **http**.
+
+**monitor_db=_path_**
+:   Path to the SQLite database used for threshold events. An empty string (the default) uses
+    `~/.local/state/btop/btop.db`.
+
+**monitor_cpu=_percent_**
+:   CPU usage threshold in percent of total CPU time. `0` (the default) disables CPU monitoring.
+
+**monitor_mem=_percent_**
+:   RAM usage threshold in percent of total memory. `0` (the default) disables memory monitoring.
+
+**monitor_disk=_percent_**
+:   Disk usage threshold in percent of used space, checked per mountpoint. `0` (the default)
+    disables disk monitoring.
+
+**monitor_net=_mbit/s_**
+:   Network bandwidth threshold in Mbit/s, checked per interface as download+upload combined.
+    `0` (the default) disables network monitoring.
+
+**monitor_debounce=_samples_**
+:   Number of consecutive samples that must exceed (or drop below) a threshold before an event is
+    recorded, preventing flapping around the threshold. Default `3`.
+
 **\-\-sections _list_**
 :   Comma separated list of sections to collect and serve: cpu, mem, net, proc, gpu. Default is
     all available sections.

@@ -263,6 +263,11 @@ else
 	SHOW_CC_INFO = true
 endif
 
+#? Bundled SQLite amalgamation, compiled as C (the amalgamation is not C++ clean)
+SQLITE_SRC := include/sqlite3/sqlite3.c
+SQLITE_OBJ := $(BUILDDIR)/sqlite3.o
+OBJECTS += $(SQLITE_OBJ)
+
 #? Setup percentage progress
 SOURCE_COUNT := $(words $(OBJECTS))
 
@@ -495,6 +500,16 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories config.h
 	@$(QUIET) || $(call white,Compiling $<)
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
+	@$(call green,$$($(PROGRESS))%$(call CUR_LEFT,10)$(call CUR_RIGHT,5)-> $(call file_with_size,$@,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
+
+#? Compile the bundled SQLite amalgamation as C
+.ONESHELL:
+$(BUILDDIR)/sqlite3.o: $(SQLITE_SRC) | directories
+	@sleep 0.3 2>/dev/null || true
+	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
+	@$(QUIET) || $(call white,Compiling $<)
+	@$(VERBOSE) || printf "$(CC) -w -O2 -c -o $@ $<\n"
+	@$(CC) -w -O2 -c -o $@ $< || exit 1
 	@$(call green,$$($(PROGRESS))%$(call CUR_LEFT,10)$(call CUR_RIGHT,5)-> $(call file_with_size,$@,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
 
 #? Compile intel_gpu_top C sources for Intel GPU support

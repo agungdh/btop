@@ -259,6 +259,19 @@ namespace Config {
 								"#* An empty host defaults to 127.0.0.1, port 0 picks a free ephemeral port. Requires no TTY."},
 		{"http_auth", 			"#* Require HTTP basic auth credentials on all HTTP server endpoints, in the form \"user:password\".\n"
 								"#* Only used together with http. Note that basic auth is sent in cleartext over the wire."},
+		{"monitor_enabled",		"#* Enable threshold monitoring in HTTP server mode. When enabled, btop records events to a\n"
+								"#* SQLite database whenever a monitored metric exceeds its configured threshold, and records\n"
+								"#* a matching \"resolved\" event once it drops back below. The database runs in WAL mode with\n"
+								"#* synchronous=NORMAL."},
+		{"monitor_db",			"#* Path to the SQLite database used for threshold events. An empty string uses the default\n"
+								"#* location \"~/.local/state/btop/btop.db\"."},
+		{"monitor_cpu",			"#* CPU usage threshold in percent of total CPU time. 0 disables monitoring for CPU."},
+		{"monitor_mem",			"#* RAM usage threshold in percent of total memory. 0 disables monitoring for memory."},
+		{"monitor_disk",		"#* Disk usage threshold in percent of used space, checked per mountpoint. 0 disables monitoring for disks."},
+		{"monitor_net",			"#* Network bandwidth threshold in Mbit/s, checked per network interface as download+upload combined.\n"
+								"#* 0 disables monitoring for network."},
+		{"monitor_debounce",	"#* Number of consecutive samples that must exceed (or drop below) the threshold before an event is\n"
+								"#* recorded. Prevents flapping around the threshold."},
 	#ifdef GPU_SUPPORT
 
 		{"nvml_measure_pcie_speeds",
@@ -309,6 +322,7 @@ namespace Config {
 		{"selected_name", ""},
 		{"http", ""},
 		{"http_auth", ""},
+		{"monitor_db", ""},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
 		{"custom_gpu_name1", ""},
@@ -386,6 +400,7 @@ namespace Config {
 		{"terminal_sync", true},
 		{"save_config_on_exit", true},
 		{"disable_mouse", false},
+		{"monitor_enabled", false},
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 
@@ -403,6 +418,11 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
+		{"monitor_cpu", 0},
+		{"monitor_mem", 0},
+		{"monitor_disk", 0},
+		{"monitor_net", 0},
+		{"monitor_debounce", 3},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
@@ -593,6 +613,18 @@ namespace Config {
 
 		else if (name == "proc_tree_auto_collapse" and i_value > 10000)
 			validError = "Config value proc_tree_auto_collapse set too high (>10000).";
+
+		else if (name.starts_with("monitor_cpu") or name.starts_with("monitor_mem") or name.starts_with("monitor_disk")) {
+			if (i_value < 0 or i_value > 100)
+				validError = "Config value " + string { name } + " must be in the range 0-100.";
+			else
+				return true;
+		}
+		else if (name == "monitor_net" and i_value < 0)
+			validError = "Config value monitor_net must be >= 0.";
+
+		else if (name == "monitor_debounce" and i_value < 1)
+			validError = "Config value monitor_debounce must be >= 1.";
 
 		else
 			return true;
@@ -852,7 +884,7 @@ namespace Config {
 		}
 	}
 
-	static constexpr auto get_xdg_state_dir() -> std::optional<fs::path> {
+	auto get_xdg_state_dir() -> std::optional<fs::path> {
 		std::optional<fs::path> xdg_state_home;
 
 		{
@@ -880,6 +912,10 @@ namespace Config {
 
 	auto get_log_file() -> std::optional<fs::path> {
 		return get_xdg_state_dir().transform([](auto&& state_home) -> auto { return state_home / "btop.log"; });
+	}
+
+	auto get_state_dir() -> std::optional<fs::path> {
+		return get_xdg_state_dir();
 	}
 
 	auto current_config() -> std::string {

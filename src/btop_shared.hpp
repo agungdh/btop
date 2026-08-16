@@ -241,6 +241,9 @@ namespace Cpu {
 	//* Collect cpu stats and temperatures
 	auto collect(bool no_update = false) -> cpu_info&;
 
+	//* Latest collected cpu stats (same storage collect() reads from)
+	extern cpu_info current_cpu;
+
 	//* Draw contents of cpu box using <cpu> as source
     string draw(
 		const cpu_info& cpu,
@@ -304,6 +307,9 @@ namespace Mem {
 
 	//* Collect mem & disks stats
 	auto collect(bool no_update = false) -> mem_info&;
+
+	//* Latest collected mem & disks stats (same storage collect() reads from)
+	extern mem_info current_mem;
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, bool force_redraw = false, bool data_same = false);
